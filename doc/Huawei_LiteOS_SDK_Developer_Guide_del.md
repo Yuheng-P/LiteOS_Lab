@@ -188,12 +188,12 @@ SDK端云互通组件的移植。需要移植的接口列表及相关函数如�
 **LiteOS SDK端云互通组件需要移植适配的接口列表**
 
 | 接口分类           | 接口名                 | 说明                 |
-|--------------------|------------------------|----------------------|
-| 网络Socket相关接口 | atiny_net_connect      |                      |
-|                    | atiny_net_recv         |                      |
-|                    | atiny_net_send         |                      |
-|                    | atiny_net_recv_timeout |                      |
-|                    | atiny_net_close        |                      |
+| ------------------ | ---------------------- | -------------------- |
+| 网络Socket相关接口 | atiny_net_connect      | 创建socket网络连接   |
+|                    | atiny_net_recv         | 接收函数             |
+|                    | atiny_net_send         | 发送函数             |
+|                    | atiny_net_recv_timeout | 阻塞式接收函数       |
+|                    | atiny_net_close        | 关闭socket网络连接   |
 | 硬件相关接口       | atiny_gettime_ms       | 获取系统时间，单位ms |
 |                    | atiny_usleep           | 延时函数，单位us     |
 |                    | atiny_random           | 硬件随机数函数       |
@@ -201,10 +201,10 @@ SDK端云互通组件的移植。需要移植的接口列表及相关函数如�
 |                    | atiny_free             | 动态内存释放         |
 |                    | atiny_snprintf         | 格式化字符串         |
 |                    | atiny_printf           | 日志输出             |
-| 资源互斥相关接口   | atiny_mutex_create     |                      |
-|                    | atiny_mutex_destroy    |                      |
-|                    | atiny_mutex_lock       |                      |
-|                    | atiny_mutex_unlock     |                      |
+| 资源互斥相关接口   | atiny_mutex_create     | 创建互斥锁           |
+|                    | atiny_mutex_destroy    | 销毁互斥锁           |
+|                    | atiny_mutex_lock       | 获取互斥锁           |
+|                    | atiny_mutex_unlock     | 释放互斥锁           |
 
 ![](./meta/SDKGuide_AgentTiny/6.gif)
 
