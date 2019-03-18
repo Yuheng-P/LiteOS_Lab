@@ -37,7 +37,7 @@
 
 #include <string.h>
 
-#include <common.h>
+#include <los_common.h>
 #include <rbtree.h>
 #include <list.h>
 
@@ -314,6 +314,24 @@ static inline chunk_t * __cm_get_chunk (chunk_mgr_t * cm, size_t bytes)
 
     return chunk;
 }
+
+#if (LOSCFG_MEM_STATISTICS == YES)
+static inline size_t __get_max_free (chunk_mgr_t * cm)
+{
+    rb_node_t * rbn = rb_last (&cm->sizes);
+    chunk_t   * chunk;
+
+    if (rbn == NULL)
+    {
+        return 0;
+    }
+
+    chunk = container_of (container_of (rbn, size_node_t, node)->list.next,
+                          chunk_t, node);
+
+    return chunk->size;
+}
+#endif
 
 #endif  /* __CM_BESTFIT_H__ */
 

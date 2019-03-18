@@ -36,7 +36,7 @@
 #define __CM_TLSF_H__
 
 #include <list.h>
-#include <common.h>
+#include "los_common.h"
 
 #include "chunk.h"
 
@@ -130,7 +130,7 @@ enum
     FL_IDX_MAX_002G,
 };
 
-#define FL_IDX_MAX              (FL_IDX_MAX_001M)
+#define FL_IDX_MAX              (FL_IDX_MAX_512M)
 #define FL_IDX_BIAS             (MIN_CHUNK_SIZE_LOG2)
 #define FL_IDXES                (FL_IDX_MAX - FL_IDX_BIAS)
 #define SL_IDXES                (1 << SL_BITS)
@@ -277,6 +277,50 @@ static inline chunk_t * __cm_get_chunk (chunk_mgr_t * cm, size_t bytes)
 
     return cm->chunks [fl_idx - FL_IDX_BIAS] [sl_idx];
 }
+
+#if (LOSCFG_MEM_STATISTICS == YES)
+static inline size_t __get_max_free (chunk_mgr_t * cm)
+{
+    int       fl_idx;
+    int       sl_idx;
+    dlist_t * itr;
+    size_t    max;
+
+    if (cm->fl_bmap == 0)
+    {
+        return 0;
+    }
+
+    /* find the highest bit in fl_bmap */
+
+    fl_idx = __clzl (1) - __clzl (cm->fl_bmap) - FL_IDX_BIAS;
+    sl_idx = __clzl (1) - __clzl (cm->sl_bmap [fl_idx]);
+
+    if (fl_idx >= FL_IDXES)
+    {
+        return 0;
+    }
+
+    if (sl_idx >= SL_IDXES)
+    {
+        return 0;
+    }
+
+    max = (cm->chunks [fl_idx][sl_idx])->size;
+
+    dlist_foreach (itr, &cm->chunks [fl_idx][sl_idx]->node)
+    {
+        chunk_t * chunk = container_of (itr, chunk_t, node);
+
+        if (chunk->size > max)
+        {
+            max = chunk->size;
+        }
+    }
+
+    return max;
+}
+#endif
 
 #endif  /* __CM_TLSF_H__ */
 
