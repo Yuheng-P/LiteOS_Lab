@@ -303,8 +303,8 @@
               </OCR_RVCT9>
               <OCR_RVCT10>
                 <Type>0</Type>
-                <StartAddress>0x0</StartAddress>
-                <Size>0x0</Size>
+                <StartAddress>0x10000000</StartAddress>
+                <Size>0x4000</Size>
               </OCR_RVCT10>
             </OnChipMemories>
             <RvctStartVector></RvctStartVector>
@@ -641,6 +641,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\arch\arm\arm-m\armv7-m\keil\los_dispatch.c</FilePath>
             </File>
+            <File>
+              <FileName>los_startup.S</FileName>
+              <FileType>2</FileType>
+              <FilePath>..\..\..\arch\arm\arm-m\armv7-m\keil\los_startup.S</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -837,11 +842,6 @@
           <GroupName>usr</GroupName>
           <Files>
             <File>
-              <FileName>los_startup_keil.s</FileName>
-              <FileType>2</FileType>
-              <FilePath>..\Usr\los_startup_keil.s</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Usr\main.c</FilePath>
@@ -900,11 +900,6 @@
               <FileName>app_smoke.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Apps\app_smoke.c</FilePath>
-            </File>
-            <File>
-              <FileName>app_beep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Apps\app_beep.c</FilePath>
             </File>
             <File>
               <FileName>app_led.c</FileName>

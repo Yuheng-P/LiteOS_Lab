@@ -42,7 +42,8 @@
 #include <mem.h>
 
 #if defined (__CC_ARM)
-extern char __heap_start__ [];
+extern char Image$$RW_IRAM1$$ZI$$Limit [];
+extern char Image$$ARM_LIB_STACKHEAP$$Base [];
 #elif defined (__GNUC__)
 extern char __los_heap_addr_start__ [];
 extern char __los_heap_addr_end__ [];
@@ -53,9 +54,9 @@ extern char __los_heap_addr_end__ [];
 const struct phys_mem system_phys_mem [] =
     {
 #if defined (__CC_ARM)
-        { __heap_start__, (char *) 0x2000FC00, },
+        { Image$$RW_IRAM1$$ZI$$Limit, Image$$ARM_LIB_STACKHEAP$$Base },
 #elif defined (__GNUC__)
-        { __los_heap_addr_start__, __los_heap_addr_end__, },
+        { __los_heap_addr_start__, __los_heap_addr_end__ },
 #else
 #error "unsupported tool!"
 #endif
@@ -71,7 +72,7 @@ VOID HardWare_Init(VOID)
 	/* Initialize all configured peripherals */
 	DelayInit();
 	MX_GPIO_Init();
-	MX_I2C1_Init();
+	//MX_I2C1_Init();
 }
 
 int main(void)
@@ -116,18 +117,18 @@ int main(void)
 
 
     //this is used in china for China Telecom
-    tagNbConfig config;
-    config.server = "139.159.140.34,5683";
-    config.bands = "5,8,20";
-    config.plmn = "46011";
-    config.apn = "1,\"IP\",\"HUAWEI.COM\"";
+//    tagNbConfig config;
+//    config.server = "49.4.85.232,5683";
+//    config.bands = "5,8,20";
+//    config.plmn = "46011";
+//    config.apn = "1,\"IP\",\"HUAWEI.COM\"";
 
     //this is used in china for China  Mobile
-//    tagNbConfig config;
-//    config.server = "139.159.140.34,5683";
-//    config.bands = "5,8,20";
-//    config.plmn = "46000" ;
-//    config.apn = "1,\"IP\",\"HUAWEI.COM\"";
+    tagNbConfig config;
+    config.server = "49.4.85.232,5683";
+    config.bands = "8,5,20";
+    config.plmn = "46000" ;
+    config.apn = "1,\"IP\",\"HUAWEI.COM\"";
 
     app_main_init(&config);  //China telecom
  #endif
