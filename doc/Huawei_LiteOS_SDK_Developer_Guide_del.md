@@ -13,6 +13,7 @@
   * [3.3 集成策略](#3.3)
   * [3.4 安全](#3.4)
   * [3.5 升级](#3.5)
+
 * [4 设备接入OceanConnect集成开发流程](#4)
   * [4.1 云侧配置流程](#4.1)
     * [4.1.1 环境准备](#4.1.1)
@@ -22,12 +23,13 @@
     * [4.1.5 注册设备](#4.1.5)
   * [4.2 端侧对接流程](#4.2)
     * [4.2.1 环境准备](#4.2.1)
-    * [4.2.2 数据结构介绍](#4.2.2)
-    * [4.2.3 LiteOS SDK端云互通组件入口函数](#4.2.3)
-    * [4.2.4 LiteOS SDK端云互通组件初始化](#4.2.4)
-    * [4.2.5 创建数据上报任务](#4.2.5)
+    * [4.2.2 LiteOS SDK端云互通组件入口函数](#4.2.2)
+    * [4.2.3 LiteOS SDK端云互通组件初始化](#4.2.3)
+    * [4.2.4 创建数据上报任务](#4.2.4)
+    * [4.2.5 LiteOS SDK端云互通组件命令处理接口](#4.2.5)
     * [4.2.6 LiteOS SDK端云互通组件主函数体](#4.2.6)
-  * [4.3 小节](#4.3)
+    * [4.2.7 数据结构介绍](#4.2.7)
+  * [4.3 小结](#4.3)
 * [5  LiteOS端云互通组件实战演练](#5)
   * [5.1 开发环境准备](#5.1)
   * [5.2 端云互通组件以太网接入实例](#5.2)
@@ -186,12 +188,12 @@ SDK端云互通组件的移植。需要移植的接口列表及相关函数如�
 **LiteOS SDK端云互通组件需要移植适配的接口列表**
 
 | 接口分类           | 接口名                 | 说明                 |
-|--------------------|------------------------|----------------------|
-| 网络Socket相关接口 | atiny_net_connect      |                      |
-|                    | atiny_net_recv         |                      |
-|                    | atiny_net_send         |                      |
-|                    | atiny_net_recv_timeout |                      |
-|                    | atiny_net_close        |                      |
+| ------------------ | ---------------------- | -------------------- |
+| 网络Socket相关接口 | atiny_net_connect      | 创建socket网络连接   |
+|                    | atiny_net_recv         | 接收函数             |
+|                    | atiny_net_send         | 发送函数             |
+|                    | atiny_net_recv_timeout | 阻塞式接收函数       |
+|                    | atiny_net_close        | 关闭socket网络连接   |
 | 硬件相关接口       | atiny_gettime_ms       | 获取系统时间，单位ms |
 |                    | atiny_usleep           | 延时函数，单位us     |
 |                    | atiny_random           | 硬件随机数函数       |
@@ -199,10 +201,10 @@ SDK端云互通组件的移植。需要移植的接口列表及相关函数如�
 |                    | atiny_free             | 动态内存释放         |
 |                    | atiny_snprintf         | 格式化字符串         |
 |                    | atiny_printf           | 日志输出             |
-| 资源互斥相关接口   | atiny_mutex_create     |                      |
-|                    | atiny_mutex_destroy    |                      |
-|                    | atiny_mutex_lock       |                      |
-|                    | atiny_mutex_unlock     |                      |
+| 资源互斥相关接口   | atiny_mutex_create     | 创建互斥锁           |
+|                    | atiny_mutex_destroy    | 销毁互斥锁           |
+|                    | atiny_mutex_lock       | 获取互斥锁           |
+|                    | atiny_mutex_unlock     | 释放互斥锁           |
 
 ![](./meta/SDKGuide_AgentTiny/6.gif)
 
@@ -451,14 +453,80 @@ IoT平台提供了插件模板库，开发者可以根据自己需要，选择�
 
 设备接入IoT平台后，IoT平台才可以对设备进行管理。设备接入平台时，需要保证IoT平台已经有对应应用，并且已经在该应用下注册了此设备。本节介绍端侧设备是如何通过端云互通组件与IoT平台实现对接的。首先给出端侧设备对接IoT平台的整体示意图。
 
-![](./meta/SDKGuide_AgentTiny/57.PNG)
+![](./meta/SDKGuide_AgentTiny/74.PNG)
 
 本小节将根据上图所示的流程，向开发者介绍终端设备是如何一步步地接入IoT平台，并进行数据上报与命令执行的。
 <h4 id="4.2.1">4.2.1 环境准备</h4>
 
 在开发之前，需要提前获取如下信息：
 
-* Huawei LiteOS及LiteOS SDK源代码
+* Huawei LiteOS及LiteOS SDK源代码。工程整体结构如下。
+
+```C
+.
+├── arch         //架构相关文件           
+│   ├── arm
+│   └── msp430
+├── build            
+│   └── Makefile
+├── components   //LiteOS各类组件
+│   ├── connectivity
+│   ├── fs
+│   ├── lib
+│   ├── log
+│   ├── net
+│   ├── ota
+│   └── security
+├── demos      //示例程序
+│   ├── agenttiny_lwm2m     //本章中列出的所有示例程序，均来自该目录下的agent_tiny_demo.c文件
+│   ├── agenttiny_mqtt
+│   ├── dtls_server
+│   ├── fs
+│   ├── kernel
+│   └── nbiot_without_atiny
+├── doc        //说明文档
+│   ├── Huawei_LiteOS_Developer_Guide_en.md
+│   ├── Huawei_LiteOS_Developer_Guide_zh.md
+│   ├── Huawei_LiteOS_SDK_Developer_Guide.md
+│   ├── LiteOS_Code_Info.md
+│   ├── LiteOS_Commit_Message.md
+│   ├── LiteOS_Contribute_Guide_GitGUI.md
+│   ├── LiteOS_Supported_board_list.md
+│   └── meta
+├── include    //工程需要的头文件    
+│   ├── at_device
+│   ├── at_frame
+│   ├── atiny_lwm2m
+│   ├── atiny_mqtt
+│   ├── fs
+│   ├── log
+│   ├── nb_iot
+│   ├── osdepends
+│   ├── ota
+│   ├── sal
+│   └── sota
+├── kernel     //系统内核
+│   ├── base
+│   ├── extended
+│   ├── include
+│   ├── los_init.c
+│   └── Makefile
+├── LICENSE    //许可
+├── osdepends  //依赖项
+│   └── liteos
+├── README.md
+├── targets    //BSP工程
+│   ├── Cloud_STM32F429IGTx_FIRE
+│   ├── Mini_Project
+│   ├── NXP_LPC51U68
+│   └── STM32F103VET6_NB_GCC
+└── tests      //测试用例
+    ├── cmockery
+    ├── test_agenttiny
+    ├── test_main.c
+    ├── test_sota
+    └── test_suit
+```
 
 >   目前托管在GitHub，地址为<https://github.com/LiteOS/LiteOS>
 
@@ -469,7 +537,221 @@ IoT平台提供了插件模板库，开发者可以根据自己需要，选择�
 
 >   说明：MDK工具需要license，请从MDK官方获取。
 
-<h4 id="4.2.2">4.2.2 数据结构介绍</h4>
+<h4 id="4.2.2">4.2.2 LiteOS SDK端云互通组件入口函数</h4>
+
+使用LiteOS SDK端云互通组件agent tiny对接IoT平台，首先需要一个入口函数```agent_tiny_entry()```。
+
+| 接口名                      | 描述                                                         |
+| --------------------------- | ------------------------------------------------------------ |
+| void agent_tiny_entry(void) | LiteOS SDK端云互通组件的入口函数。该接口将进行agent tiny的初始化相关操作，创建上报任务，并调用agent tiny主函数体。<br>参数列表：空<br>返回值：空 |
+
+开发者可以通过LiteOS内核提供的任务机制，创建一个主任务main_task。在主任务中调用入口函数```agent_tiny_entry()```，开启agent tiny工作流程。
+
+```c
+    UINT32 creat_main_task()
+    {
+        UINT32 uwRet = LOS_OK;
+        TSK_INIT_PARAM_S task_init_param;
+        task_init_param.usTaskPrio = 0;
+        task_init_param.pcName = "main_task";
+        task_init_param.pfnTaskEntry = (TSK_ENTRY_FUNC)main_task;
+        task_init_param.uwStackSize = 0x1000;
+        uwRet = LOS_TaskCreate(&g_TskHandle, &task_init_param);
+        if(LOS_OK != uwRet)
+        {
+            return uwRet;
+        }
+        return uwRet;
+    }
+```
+
+<h4 id="4.2.3">4.2.3 LiteOS SDK端云互通组件初始化</h4>
+
+在入口函数中，需要调用```atiny_init()```进行agent tiny的初始化相关操作。
+
+| 接口名                                                       | 描述                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| int   atiny_init(atiny_param_t* atiny_params, void** phandle) | LiteOS SDK端云互通组件的初始化接口，由LiteOS SDK端云互通组件实现，设备调用。<br>参数列表：参数```atiny_params```为入参，包含初始化操作所需的各个变量，具体请参考服务器参数结构体```atiny_param_t```；参数```phandle```为出参，表示当前创建的agent tiny的句柄。<br>返回值：整形变量，标识初始化成功或失败的状态。 |
+
+对于入参```atiny_params```的设定，要根据具体的业务来进行。开发者可以参考下面的代码。
+
+```C
+#ifdef CONFIG_FEATURE_FOTA
+    hal_init_ota();   //若定义FOTA功能，则需进行FOTA相关初始化
+#endif
+
+#ifdef WITH_DTLS
+    device_info->endpoint_name = g_endpoint_name_s;  //加密设备验证码
+#else
+    device_info->endpoint_name = g_endpoint_name;    //非加密设备验证码
+#endif
+#ifdef CONFIG_FEATURE_FOTA
+    device_info->manufacturer = "Lwm2mFota";    //设备厂商
+    device_info->dev_type = "Lwm2mFota";        //设备类型
+#else
+    device_info->manufacturer = "Agent_Tiny";   
+#endif
+    atiny_params = &g_atiny_params;
+    atiny_params->server_params.binding = "UQ";   //绑定方式
+    atiny_params->server_params.life_time = 20;   //生命周期
+    atiny_params->server_params.storing_cnt = 0;  //缓存数据报文个数
+
+    atiny_params->server_params.bootstrap_mode = BOOTSTRAP_FACTORY;   //引导模式
+    atiny_params->server_params.hold_off_time = 10;    //等待时延
+
+    //pay attention: index 0 for iot server, index 1 for bootstrap server.
+    iot_security_param = &(atiny_params->security_params[0]);
+    bs_security_param = &(atiny_params->security_params[1]);
+
+
+    iot_security_param->server_ip = DEFAULT_SERVER_IPV4;  //服务器地址
+    bs_security_param->server_ip = DEFAULT_SERVER_IPV4;
+
+#ifdef WITH_DTLS
+    iot_security_param->server_port = "5684";   //加密设备端口号
+    bs_security_param->server_port = "5684";
+
+    iot_security_param->psk_Id = g_endpoint_name_iots;         //加密设备验证码
+    iot_security_param->psk = (char *)g_psk_iot_value;         //PSK码
+    iot_security_param->psk_len = sizeof(g_psk_iot_value);     //PSK码长度
+
+    bs_security_param->psk_Id = g_endpoint_name_bs;
+    bs_security_param->psk = (char *)g_psk_bs_value;
+    bs_security_param->psk_len = sizeof(g_psk_bs_value);
+#else
+    iot_security_param->server_port = "5683";    //非加密设备端口号
+    bs_security_param->server_port = "5683";
+
+    iot_security_param->psk_Id = NULL;    //非加密设备，无需PSK相关参数设置
+    iot_security_param->psk = NULL;
+    iot_security_param->psk_len = 0;
+
+    bs_security_param->psk_Id = NULL;
+    bs_security_param->psk = NULL;
+    bs_security_param->psk_len = 0;
+#endif
+```
+
+设定好atiny_params后，即可根据设定的参数对agent tiny进行初始化。
+```c
+   if(ATINY_OK != atiny_init(atiny_params, &g_phandle))
+   {
+       return;
+   }
+```
+对于初始化接口```atiny_init()```内部，主要进行入参合法性的检验，agent tiny所需资源的创建等工作，一般不需要开发者进行修改。
+
+<h4 id="4.2.4">4.2.4 创建数据上报任务</h4>
+
+在完成agent tiny的初始化后，需要通过调用```creat_report_task()```创建一个数据上报的任务```app_data_report()```。
+
+```c
+    UINT32 creat_report_task()
+    {
+        UINT32 uwRet = LOS_OK;
+        TSK_INIT_PARAM_S task_init_param;
+        UINT32 TskHandle;
+        task_init_param.usTaskPrio = 1;
+        task_init_param.pcName = "app_data_report";
+        task_init_param.pfnTaskEntry = (TSK_ENTRY_FUNC)app_data_report;
+        task_init_param.uwStackSize = 0x400;
+        uwRet = LOS_TaskCreate(&TskHandle, &task_init_param);
+        if(LOS_OK != uwRet)
+        {
+            return uwRet;
+        }
+        return uwRet;
+    }
+```
+在```app_data_report()```中应该完成对数据上报数据结构```data_report_t```的赋值，包括数据缓冲区地址```buf```，收到平台ack响应后的回调函数```callback```，数据```cookie```，数据长度```len```，以及数据上报类型```type```（在这里固定为```APP_DATA```）。
+
+```C
+    uint8_t buf[5] = {0, 1, 6, 5, 9};
+    data_report_t report_data;
+    int ret = 0;
+    int cnt = 0;
+    report_data.buf = buf;
+    report_data.callback = ack_callback;
+    report_data.cookie = 0;
+    report_data.len = sizeof(buf);
+    report_data.type = APP_DATA;
+```
+
+完成对```report_data```的赋值后，即可通过接口```atiny_data_report()```上报数据。
+
+| 接口名                                                       | 描述                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| int atiny_data_report(void* phandle, data_report_t* report_data) | LiteOS SDK端云互通组件数据上报接口，由LiteOS SDK端云互通组件实现，设备调用，设备应用数据使用该接口上报。该接口为阻塞接口，不允许在中断中使用。<br>参数列表：参数```phandle```为调用初始化接口```atiny_init()```得到的agent tiny的句柄；参数```report_data```为数据上报数据结构。<br>返回值：整形变量，标识数据上报成功或失败的状态。 |
+
+示例代码中的上报任务实现方法如下。
+
+```C
+    while(1)
+    {
+        report_data.cookie = cnt;
+        cnt++;
+        ret = atiny_data_report(g_phandle, &report_data);   //数据上报接口
+        ATINY_LOG(LOG_DEBUG, "data report ret: %d\n", ret);
+        (void)LOS_TaskDelay(250 * 8);
+    }
+```
+
+<h4 id="4.2.5">4.2.5 LiteOS SDK端云互通组件命令处理接口</h4>
+IoT平台下发的各类命令，都通过接口atiny_cmd_ioctl()来具体执行。
+
+| 接口名                                                     | 描述                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------ |
+| int atiny_cmd_ioctl (atiny_cmd_e cmd, char* arg, int len); | LiteOS SDK端云互通组件申明和调用，由开发者实现。该接口是LwM2M标准对象向设备下发命令的统一入口。<br/>参数列表：参数```cmd```为具体命令字，比如下发业务数据，下发复位，升级命令等；参数```arg```为存放命令参数的缓存；参数```len```为缓存大小。<br>返回值：空。 |
+
+```atiny_cmd_ioctl()```是LiteOS SDK端云互通组件定义的一个通用可扩展的接口，其命令字如```atiny_cmd_e```所定义，用户根据自身需求进行选择性实现，也可以根据自身需求进行扩展。常用的接口定义如下表所示，每一个接口都和atiny_cmd_e的枚举值一一对应：
+
+| 回调接口函数                                             | 描述                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------ |
+| int atiny_get_manufacturer(char* manufacturer,int len)   | 获取厂商名字，参数manufacturer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的厂商名字，长度不能超过参数len。 |
+| int atiny_get_dev_type(char * dev_type,int len)          | 获取设备类型，参数dev_type指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备类型，长度不能超过参数len。 |
+| int atiny_get_model_number((char * model_numer, int len) | 获取设备模型号，参数model_numer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备模型号，长度不能超过参数len。 |
+| int atiny_get_serial_number(char* num,int len)           | 获取设备序列号，参数numer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备序列号，长度不能超过参数len。 |
+| int atiny_get_dev_err(int* arg，int len)                 | 获取设备状态，比如内存耗尽、电池不足、信号强度低等，参数arg由LiteOS SDK端云互通组件分配，用户填充，长度不能超过len。 |
+| int atiny_do_dev_reboot(void)                            | 设备复位。                                                   |
+| int atiny_do_factory_reset(void)                         | 厂商复位。                                                   |
+| int atiny_get_baterry_level(int* voltage)                | 获取电池剩余电量。                                           |
+| int atiny_get_memory_free(int* size)                     | 获取空闲内存大小。                                           |
+| int atiny_get_total_memory(int* size)                    | 获取总共内存大小。                                           |
+| int atiny_get_signal_strength(int* singal_strength)      | 获取信号强度。                                               |
+| int atiny_get_cell_id(long* cell_id)                     | 获取小区ID。                                                 |
+| int atiny_get_link_quality(int* quality)                 | 获取信道质量。                                               |
+| int atiny_write_app_write(void* user_data, int len)      | 业务数据下发。                                               |
+| int atiny_update_psk(char* psk_id, int len)              | 预置共享密钥更新。                                           |
+
+其中，开发者需要根据自身的业务，在接口```atiny_write_app_write()```中实现自己的命令响应。
+
+```c
+    int atiny_write_app_write(void* user_data, int len)
+    {
+        (void)atiny_printf("write num19 object success\r\n");
+        return ATINY_OK;
+    }
+```
+
+<h4 id="4.2.6">4.2.6 LiteOS SDK端云互通组件主函数体</h4>
+
+完成了数据上报任务的创建与命令处理接口的实现，agent tiny进入到对接IoT平台的核心步骤```atiny_bind()```。
+
+| 接口名                                                       | 描述                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| int   atiny_bind(atiny_device_info_t* device_info, void* phandle) | LiteOS SDK端云互通组件的主函数体，由LiteOS SDK端云互通组件实现，设备调用，调用成功后，不会返回。该接口是LiteOS SDK端云互通组件主循环体，实现了LwM2M协议处理，注册状态机，重传队列，订阅上报。<br>参数列表：参数```device_info```为终端设备参数结构体；参数```phandle```为调用初始化接口```atiny_init()```得到的agent tiny的句柄。<br>返回值：整形变量，标识LiteOS SDK端云互通组件主函数体执行的状态。只有执行失败或者调用了LiteOS SDK端云互通组件去初始化接口```atiny_deinit()```才会返回。 |
+
+```atiny_bind()```会根据LwM2M协议标准，进行LwM2M客户端创建与注册，并将数据上报任务```app_data_report()```中上报的数据递交给通信模块发送到IoT平台，同时接受IoT平台下发的命令消息，解析后由命令处理接口```atiny_cmd_ioctl()```统一进行处理。与```atiny_init()```一样，```atiny_bind()```内部一般不需要开发者进行修改。
+
+> 说明：关于LwM2M协议相关内容，请开发者参考附录。
+
+LiteOS SDK端云互通组件通过主函数体，不断地进行数据上报与命令处理。当调用LiteOS SDK端云互通组件去初始化接口```atiny_deinit()```时，退出主函数体。
+
+| 接口名                            | 描述                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| void atiny_deinit(void* phandle); | LiteOS SDK端云互通组件的去初始化接口，由LiteOS SDK端云互通组件实现，设备调用。该接口为阻塞式接口，调用该接口时，会直到agent tiny主任务退出，资源释放完毕，该接口才会退出。<br>参数列表：参数```phandle```为调用```atiny_init()```获取到的LiteOS SDK端云互通组件句柄。<br>返回值：空 |
+
+<h4 id="4.2.7">4.2.7 数据结构介绍</h4>
 
 * 平台下发命令枚举类型
 
@@ -613,569 +895,23 @@ typedef struct _data_report_t
 } data_report_t;
 ```
 
-<h4 id="4.2.3">4.2.3 LiteOS SDK端云互通组件入口函数</h4>
-
-使用LiteOS SDK端云互通组件agent tiny对接IoT平台，首先需要一个入口函数```agent_tiny_entry()```。
-
-| 接口名                      | 描述                                                         |
-| --------------------------- | ------------------------------------------------------------ |
-| void agent_tiny_entry(void) | LiteOS SDK端云互通组件的入口函数。该接口将进行agent tiny的初始化相关操作，创建上报任务，并调用agent tiny主函数体。<br>参数列表：空<br>返回值：空 |
-
-开发者可以通过LiteOS内核提供的任务机制，创建一个主任务main_task。在主任务中调用入口函数```agent_tiny_entry()```，开启agent tiny工作流程。需要注意的是，主任务main_task的任务栈需要设大一些（建议1kb），以免在后续运行时出现溢出。
-
-<h4 id="4.2.4">4.2.4 LiteOS SDK端云互通组件初始化</h4>
-
-在入口函数中，需要调用```atiny_init()```进行agent tiny的初始化相关操作。
-
-| 接口名                                                       | 描述                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| int   atiny_init(atiny_param_t* atiny_params, void** phandle) | LiteOS SDK端云互通组件的初始化接口，由LiteOS SDK端云互通组件实现，设备调用。<br>参数列表：参数```atiny_params```为入参，包含初始化操作所需的各个变量，具体请参考服务器参数结构体```atiny_param_t```；参数```phandle```为出参，表示当前创建的agent tiny的句柄。<br>返回值：整形变量，标识初始化成功或失败的状态。 |
-
-对于入参```atiny_params```的设定，要根据具体的业务来进行。开发者可以参考下面的代码。
-
-```C
-#ifdef CONFIG_FEATURE_FOTA
-    hal_init_ota();   //若定义FOTA功能，则需进行FOTA相关初始化
-#endif
-
-#ifdef WITH_DTLS
-    device_info->endpoint_name = g_endpoint_name_s;  //加密设备验证码
-#else
-    device_info->endpoint_name = g_endpoint_name;    //非加密设备验证码
-#endif
-#ifdef CONFIG_FEATURE_FOTA
-    device_info->manufacturer = "Lwm2mFota";    //设备厂商
-    device_info->dev_type = "Lwm2mFota";        //设备类型
-#else
-    device_info->manufacturer = "Agent_Tiny";   
-#endif
-    atiny_params = &g_atiny_params;
-    atiny_params->server_params.binding = "UQ";   //绑定方式
-    atiny_params->server_params.life_time = 20;   //生命周期
-    atiny_params->server_params.storing_cnt = 0;  //缓存数据报文个数
-
-    atiny_params->server_params.bootstrap_mode = BOOTSTRAP_FACTORY;   //引导模式
-    atiny_params->server_params.hold_off_time = 10;    //等待时延
-
-    //pay attention: index 0 for iot server, index 1 for bootstrap server.
-    iot_security_param = &(atiny_params->security_params[0]);
-    bs_security_param = &(atiny_params->security_params[1]);
-
-
-    iot_security_param->server_ip = DEFAULT_SERVER_IPV4;  //服务器地址
-    bs_security_param->server_ip = DEFAULT_SERVER_IPV4;
-
-#ifdef WITH_DTLS
-    iot_security_param->server_port = "5684";   //加密设备端口号
-    bs_security_param->server_port = "5684";
-
-    iot_security_param->psk_Id = g_endpoint_name_iots;         //加密设备验证码
-    iot_security_param->psk = (char *)g_psk_iot_value;         //PSK码
-    iot_security_param->psk_len = sizeof(g_psk_iot_value);     //PSK码长度
-
-    bs_security_param->psk_Id = g_endpoint_name_bs;
-    bs_security_param->psk = (char *)g_psk_bs_value;
-    bs_security_param->psk_len = sizeof(g_psk_bs_value);
-#else
-    iot_security_param->server_port = "5683";    //非加密设备端口号
-    bs_security_param->server_port = "5683";
-
-    iot_security_param->psk_Id = NULL;    //非加密设备，无需PSK相关参数设置
-    iot_security_param->psk = NULL;
-    iot_security_param->psk_len = 0;
-
-    bs_security_param->psk_Id = NULL;
-    bs_security_param->psk = NULL;
-    bs_security_param->psk_len = 0;
-#endif
-```
-
-设定好atiny_params后，即可根据设定的参数对agent tiny进行初始化。对于初始化接口```atiny_init()```内部，主要进行入参合法性的检验，agent tiny所需资源的创建等工作，一般不需要开发者进行修改。
-
-```C
-int  atiny_init(atiny_param_t *atiny_params, void **phandle)
-{
-    int result;
-    result = atiny_init_rpt(); //数据上报缓存g_atiny_rpt_table初始化
-    if (result != ATINY_OK)
-    {
-        ATINY_LOG(LOG_FATAL, "atiny_init_rpt fail,ret=%d", result);
-        return result;
-    }
-/*入参合法性检验start*/
-    if (NULL == atiny_params || NULL == phandle)
-    {
-        ATINY_LOG(LOG_FATAL, "Invalid args");
-        return ATINY_ARG_INVALID;
-    }
-    if(ATINY_OK != atiny_check_bootstrap_init_param(atiny_params))
-    {
-        LOG("[bootstrap_tag]: BOOTSTRAP's params are wrong");
-        return ATINY_ARG_INVALID;
-    }
-#ifdef LWM2M_BOOTSTRAP
-    if(ATINY_OK != atiny_check_psk_init_param(atiny_params))
-    {
-        LOG("[bootstrap_tag]: psk params are wrong");
-    }
-#endif
-/*入参合法性检验end*/
-
-    memset((void *)&g_atiny_handle, 0, sizeof(handle_data_t));
-    
-    g_atiny_handle.quit_sem = atiny_mutex_create();  //互斥锁创建
-    if (NULL == g_atiny_handle.quit_sem)
-    {
-        ATINY_LOG(LOG_FATAL, "atiny_mutex_create fail");
-        return ATINY_RESOURCE_NOT_ENOUGH;
-    }
-    atiny_mutex_lock(g_atiny_handle.quit_sem);
-    g_atiny_handle.atiny_params = *atiny_params;
-    *phandle = &g_atiny_handle;
-
-#ifdef CONFIG_FEATURE_FOTA
-    return atiny_fota_manager_set_storage_device(atiny_fota_manager_get_instance());
-#else
-    return ATINY_OK;
-#endif
-}
-```
-
-<h4 id="4.2.5">4.2.5 创建数据上报任务</h4>
-
-在完成agent tiny的初始化后，需要通过调用```creat_report_task()```创建一个数据上报的任务```app_data_report()```。在该任务中应该完成对数据上报数据结构```data_report_t```的赋值，包括数据缓冲区地址```buf```，收到平台ack响应后的回调函数```callback```，数据```cookie```，数据长度```len```，以及数据上报类型```type```（在这里固定为```APP_DATA```）。
-
-```C
-    uint8_t buf[5] = {0, 1, 6, 5, 9};
-    data_report_t report_data;
-    int ret = 0;
-    int cnt = 0;
-    report_data.buf = buf;
-    report_data.callback = ack_callback;
-    report_data.cookie = 0;
-    report_data.len = sizeof(buf);
-    report_data.type = APP_DATA;
-```
-
-完成对```report_data```的赋值后，即可通过接口```atiny_data_report()```上报数据。
-
-| 接口名                                                       | 描述                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| int atiny_data_report(void* phandle, data_report_t* report_data) | LiteOS SDK端云互通组件数据上报接口，由LiteOS SDK端云互通组件实现，设备调用，设备应用数据使用该接口上报。该接口为阻塞接口，不允许在中断中使用。<br>参数列表：参数```phandle```为调用初始化接口```atiny_init()```得到的agent tiny的句柄；参数```report_data```为数据上报数据结构。<br>返回值：整形变量，标识数据上报成功或失败的状态。 |
-
-上报任务一般的实现方法是在一个无限循环中，每隔一定的时延就调用一次```atiny_data_report()```，不断地进行业务数据上报。
-
-```C
-    while(1)
-    {
-        report_data.cookie = cnt;
-        cnt++;
-        ret = atiny_data_report(g_phandle, &report_data);
-        ATINY_LOG(LOG_DEBUG, "data report ret: %d\n", ret);
-        (void)LOS_TaskDelay(250 * 8);
-    }
-```
-
-需要指出的是，数据上报接口```atiny_data_report()```并没有真正地将数据上报到IoT平台，而是将数据存入一个特定资源/19/0/0的缓存队列。对```atiny_data_report()```的实现进行简单的分析可知，由于传入的```report_data->type```为```APP_DATA```，程序将会执行第二个case。其中```BINARY_APP_DATA_OBJECT_ID```定义为19，19号对象代表开发者应用业务数据；```BINARY_APP_DATA_RES_ID```为0。
-
-```C
-switch (report_data->type)
-    {
-    case FIRMWARE_UPDATE_STATE:
-        (void)lwm2m_stringToUri("/5/0/3", 6, &uri);
-        break;
-    case APP_DATA:
-        get_resource_uri(BINARY_APP_DATA_OBJECT_ID, 0, BINARY_APP_DATA_RES_ID, &uri);
-        break;
-    default:
-        return ATINY_RESOURCE_NOT_FOUND;
-    }
-```
-得到资源对应的```uri```后，将需要上报的数据存入缓存队列：
-
-```C
-    memcpy(data.buf, report_data->buf, report_data->len);
-    ret = atiny_queue_rpt_data(&uri, &data);
-```
-
-后续agent tiny将会从这个缓存队列中将数据读取出来，打包成LwM2M协议规定的格式后通过网络上传到IoT平台。
-
->   说明：资源```uri```的定义涉及到LwM2M协议栈相关内容，具体请开发者参见附录。
-
-<h4 id="4.2.6">4.2.6 LiteOS SDK端云互通组件主函数体</h4>
-
-成功创建数据上报任务```atiny_data_report()```后，agent tiny进入到对接IoT平台的核心步骤```atiny_bind()```。
-
-| 接口名                                                       | 描述                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| int   atiny_bind(atiny_device_info_t* device_info, void* phandle) | LiteOS SDK端云互通组件的主函数体，由LiteOS SDK端云互通组件实现，设备调用，调用成功后，不会返回。该接口是LiteOS SDK端云互通组件主循环体，实现了LwM2M协议处理，注册状态机，重传队列，订阅上报。<br>参数列表：参数```device_info```为终端设备参数结构体；参数```phandle```为调用初始化接口```atiny_init()```得到的agent tiny的句柄。<br>返回值：整形变量，标识LiteOS SDK端云互通组件主函数体执行的状态。只有执行失败或者调用了LiteOS SDK端云互通组件去初始化接口```atiny_deinit()```才会返回。 |
-
-具体到```atiny_bind()```接口的实现，首先进行的是传入参数的合法性检验。
-
-```C
-    if ((NULL == device_info) || (NULL == phandle))
-    {
-        ATINY_LOG(LOG_FATAL, "Parameter null");
-        return ATINY_ARG_INVALID;
-    }
-
-    if (NULL == device_info->endpoint_name)
-    {
-        ATINY_LOG(LOG_FATAL, "Endpoint name null");
-        return ATINY_ARG_INVALID;
-    }
-
-    if (NULL == device_info->manufacturer)
-    {
-        ATINY_LOG(LOG_FATAL, "Manufacturer name null");
-        return ATINY_ARG_INVALID;
-    }
-```
-
-接下来，agent tiny需要创建LwM2M客户端，注册终端所包含的对象，最后对客户端运行环境进行配置。为了简化开发流程，使开发者聚焦于自己的业务代码，LiteOS SDK端云互通组件已经在接口```atiny_init_objects()```中完成了这些工作。具体实现如下。
-
-```C
-    pdata = &handle->client_data;
-    memset(pdata, 0, sizeof(client_data_t));
-    ATINY_LOG(LOG_INFO, "Trying to init objects");
-    lwm2m_context = lwm2m_init(pdata);      //创建LwM2M客户端
-    if (NULL == lwm2m_context)
-    {
-        ATINY_LOG(LOG_FATAL, "lwm2m_init fail");
-        return ATINY_MALLOC_FAILED;
-    }
-```
-```C
-/*注册终端各类对象*/
-    handle->obj_array[OBJ_SECURITY_INDEX] = get_security_object(serverId, atiny_params, lwm2m_context);
-    if (NULL ==  handle->obj_array[OBJ_SECURITY_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create security object");
-        return ATINY_MALLOC_FAILED;
-    }
-    pdata->securityObjP = handle->obj_array[OBJ_SECURITY_INDEX];
-
-    handle->obj_array[OBJ_SERVER_INDEX] = get_server_object(serverId, atiny_params->server_params.binding,atiny_params->server_params.life_time, atiny_params->server_params.storing_cnt != 0);
-    if (NULL == handle->obj_array[OBJ_SERVER_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create server object");
-        return ATINY_MALLOC_FAILED;
-    }
-
-    handle->obj_array[OBJ_ACCESS_CONTROL_INDEX] = acc_ctrl_create_object();
-    if (NULL == handle->obj_array[OBJ_ACCESS_CONTROL_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create access control object");
-        return ATINY_MALLOC_FAILED;
-    }
-
-    handle->obj_array[OBJ_DEVICE_INDEX] = get_object_device(atiny_params, device_info->manufacturer);
-    if (NULL == handle->obj_array[OBJ_DEVICE_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create device object");
-        return ATINY_MALLOC_FAILED;
-    }
-
-    handle->obj_array[OBJ_CONNECT_INDEX] = get_object_conn_m(atiny_params);
-    if (NULL == handle->obj_array[OBJ_CONNECT_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create connect object");
-        return ATINY_MALLOC_FAILED;
-    }
-
-    handle->obj_array[OBJ_FIRMWARE_INDEX] = get_object_firmware(atiny_params);
-#ifdef CONFIG_FEATURE_FOTA
-    if (NULL == handle->obj_array[OBJ_FIRMWARE_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create firmware object");
-        return ATINY_MALLOC_FAILED;
-    }
-#endif
-
-    handle->obj_array[OBJ_LOCATION_INDEX] = get_object_location();
-    if (NULL == handle->obj_array[OBJ_LOCATION_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create location object");
-        return ATINY_MALLOC_FAILED;
-    }
-
-    handle->obj_array[OBJ_APP_INDEX] = get_binary_app_data_object(atiny_params);
-    if (NULL == handle->obj_array[OBJ_APP_INDEX])
-    {
-        ATINY_LOG(LOG_FATAL, "Failed to create app object");
-        return ATINY_MALLOC_FAILED;
-    }
-```
-```C
-    result = lwm2m_configure(lwm2m_context, epname, NULL, NULL, OBJ_MAX_NUM, handle->obj_array);    //配置客户端运行环境
-    if (result != 0)
-    {
-        return ATINY_RESOURCE_NOT_FOUND;
-    }
-```
-因此，在主函数体```atiny_bind()```完成传入参数合法性检测后，开发者只需通过调用接口```atiny_init_objects()```即可完成创建与配置LwM2M客户端的相关工作。
-```C
-    ret = atiny_init_objects(&handle->atiny_params, device_info, handle);
-    if (ret != ATINY_OK)
-    {
-        ATINY_LOG(LOG_FATAL, "atiny_init_object fail %d", ret);
-        atiny_destroy(handle);
-        return ret;
-    }
-```
-
-```atiny_init_objects()```成功返回后，agent tiny将注册收到IoT平台ack消息后的回调函数```observe_handle_ack()```，关键事件通知函数```atiny_event_handle()```以及连接失败的通知函数```atiny_connection_err_notify()```。
-
-```C
-    lwm2m_register_observe_ack_call_back(observe_handle_ack);
-    lwm2m_register_event_handler(atiny_event_handle);
-    lwm2m_register_connection_err_notify(atiny_connection_err_notify);
-```
-其中关键事件通知函数涉及到需要开发者实现的接口```atiny_event_notify()```。
-
-| 接口名                                                       | 描述                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| void atiny_event_notify(atiny_event_e event, const char* arg, int len); | LiteOS SDK端云互通组件申明和调用，由开发者实现。LiteOS SDK端云互通组件把注册过程的关键状态，以及运行过程的关键事件通知用户，便于用户根据自身的应用场景灵活地做可靠性处理。<br>参数列表：参数```event```为具体事件类型，比如设备注册，去注册，数据订阅和去订阅等；参数```arg```为存放事件参数的缓存；参数```len```为缓存大小。<br/>返回值：空。 |
-
-完成上述工作后，agent tiny开始执行主循环：
-```C
-    while (!handle->atiny_quit)
-    {
-        timeout = BIND_TIMEOUT;
-        (void)atiny_step_rpt(handle->lwm2m_context);
-        atiny_handle_reconnect(handle);
-        (void)lwm2m_step(handle->lwm2m_context, (time_t *)&timeout);
-        reboot_check();
-        (void)lwm2m_poll(handle, &timeout);
-    }
-```
-- atiny_step_rpt()
-终端设备一般包含众多资源，每个资源都有其对应的缓存队列，用以存放传感器数据。而所有缓存队列都会以双向链表的形式存放在静态变量```g_atiny_rpt_table```中。接口```atiny_step_rpt()```的作用，就是从```g_atiny_rpt_table```中找到需要上报的资源所对应的数据缓存队列，并对其进行状态更新处理，以便后续步骤能够将数据正常上报。agent tiny通过互斥锁的方式保证此过程中没有别的进程或任务访问```g_atiny_rpt_table```。接口```atiny_step_rpt()```的具体实现如下。
-
-```C
-    int atiny_step_rpt(lwm2m_context_t *context)
-    {
-        atiny_mutex_lock(g_mutex);
-        atiny_visit_list(&g_atiny_rpt_table,atiny_notify_stack_rpt_data_change, context);
-        atiny_mutex_unlock(g_mutex);
-        return ATINY_OK;
-    }
-```
-- atiny_handle_reconnect()
-当终端设备与IoT平台之间出现连接错误，agent tiny会启动重连流程。而重连流程是由接口```atiny_handle_reconnect()```触发的。如果设备出现数据收发失败的情况，agent tiny将会调用之前注册的连接失败通知函数```atiny_connection_err_notify()```，并将重连标志```reconnect_flag```置位。在接口```atiny_handle_reconnect()```中将根据该标志判断是否需要与IoT平台进行重连。其实现如下。
-
-```C
-    static void atiny_handle_reconnect(handle_data_t *handle)
-    {
-        if(handle->reconnect_flag)
-        {
-            (void)lwm2m_reconnect(handle->lwm2m_context);//变更LwM2M客户端注册状态，触发重连
-            handle->reconnect_flag = false;
-            ATINY_LOG(LOG_INFO, "lwm2m reconnect");
-        }
-    }
-```
-- lwm2m_step()
-接口```lwm2m_step()```中所做的主要工作包括：
-	* 注册状态机的维护
-	* IoT平台订阅数据上报，维护当前时间更新
-```C
-    switch (contextP->state)
-    {
-    case STATE_INITIAL:
-        ...
-    case STATE_BOOTSTRAP_REQUIRED:
-        ...
-    case STATE_BOOTSTRAPPING:
-        ...
-    case STATE_REGISTER_REQUIRED:
-        ...
-    case STATE_REGISTERING:
-        ...
-    case STATE_READY:
-        ...
-    case STATE_DELAY:
-        ...
-    default:
-        break;
-    }
-    
-    observe_step(contextP, tv_sec, timeoutP);
-    registration_step(contextP, tv_sec, timeoutP);
-    transaction_step(contextP, tv_sec, timeoutP);
-```
-开发者的业务数据上报就是在接口```observe_step()```中完成的：
-
-```C
-    if (dm_isUriOpaqueHandle(&(targetP->uri)))
-    {
-        observe_app_step(contextP, targetP, currentTime, timeoutP);
-        continue;
-    }
-```
-在[4.2.5](#4.2.5)小节中提到，在数据上报任务```app_data_report()```中，agent tiny仅将数据存入业务数据资源/19/0/0所对应的缓存队列中。此时才会通过上面给出的代码段从缓存队列中取出数据，并发送到IoT平台。其中，接口```dm_isUriOpaqueHandle()```通过传入的```uri```判断该对象是否为19号应用业务数据对象：
-```C
-    static inline int dm_isUriOpaqueHandle(const lwm2m_uri_t * uriP)
-    {
-        return (19 == uriP->objectId);
-    }
-```
-若返回为真，则调用接口```observe_app_step()```。在该接口中将会访问/19/0/0资源所对应的缓存队列，取出数据并打包成LwM2M协议栈所定义的格式，最终通过以太网或无线通信模组发送到IoT平台。
-```C
-    while (COAP_205_CONTENT == object_readData(contextP, &targetP->uri, &size, &dataP, &cfg, 0)) //从缓存队列中取出数据dataP
-    {
-    ...
-    res = lwm2m_data_serialize(&targetP->uri, size, dataP, &(watcherP->format), &buffer); //将dataP序列化，得到buffer
-    ...
-    //将buffer打包并最终发送到IoT平台
-    (void)observe_send_transaction(contextP, &cfg, watcherP, buffer, length);
-    ...
-    }
-```
-接口```observe_send_transaction()```内部经过逐层处理，最终在接口```atiny_net_send()```中，通过以太网或无线通信模组将打包好的数据进行上报。
-
-```C
-...
-    {
-        //agent tiny进行数据上报
-        ret = atiny_net_send(connP->net_context, buffer, length);
-    }
-    /*根据返回值进行相应的处理*/
-    if(ret >= 0)
-    {
-        connP->errs[CONNECTION_SEND_ERR] = 0;
-        return COAP_NO_ERROR;
-    }
-    else
-    {
-        inc_connection_stat(connP, CONNECTION_SEND_ERR);
-        return COAP_500_INTERNAL_SERVER_ERROR;
-    }
-```
- 其中，接口```inc_connection_stat()```中将会调用之前agent tiny注册的连接失败通知函数```atiny_connection_err_notify()```，进行重连处理等操作。
-- reboot_check()
-顾名思义，该接口会判断设备是否需要重启。当IoT平台下发了重启命令，或者进行FOTA升级时固件包下载完成后，设备都会将重启标志```g_reboot```置位并重新启动。
-```C
-    void reboot_check(void)
-    {
-        if(g_reboot == 1)
-        {
-            (void)atiny_cmd_ioctl(ATINY_DO_DEV_REBOOT, NULL, 0);
-        }
-    }
-```
-IoT平台下发的各类命令，都通过接口```atiny_cmd_ioctl()```来具体执行。
-
-| 接口名                                                     | 描述                                                         |
-| ---------------------------------------------------------- | ------------------------------------------------------------ |
-| int atiny_cmd_ioctl (atiny_cmd_e cmd, char* arg, int len); | LiteOS SDK端云互通组件申明和调用，由开发者实现。该接口是LwM2M标准对象向设备下发命令的统一入口。<br/>参数列表：参数```cmd```为具体命令字，比如下发业务数据，下发复位，升级命令等；参数```arg```为存放命令参数的缓存；参数```len```为缓存大小。<br>返回值：空。 |
-
-```atiny_cmd_ioctl()```是LiteOS SDK端云互通组件定义的一个通用可扩展的接口，其命令字如```atiny_cmd_e```所定义，用户根据自身需求进行选择性实现，也可以根据自身需求进行扩展。常用的接口定义如下表所示，每一个接口都和atiny_cmd_e的枚举值一一对应：
-
-| 回调接口函数                                             | 描述                                                         |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| int atiny_get_manufacturer(char* manufacturer,int len)   | 获取厂商名字，参数manufacturer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的厂商名字，长度不能超过参数len。 |
-| int atiny_get_dev_type(char * dev_type,int len)          | 获取设备类型，参数dev_type指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备类型，长度不能超过参数len。 |
-| int atiny_get_model_number((char * model_numer, int len) | 获取设备模型号，参数model_numer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备模型号，长度不能超过参数len。 |
-| int atiny_get_serial_number(char* num,int len)           | 获取设备序列号，参数numer指向的内存由LiteOS SDK端云互通组件分配，户填充自身的设备序列号，长度不能超过参数len。 |
-| int atiny_get_dev_err(int* arg，int len)                 | 获取设备状态，比如内存耗尽、电池不足、信号强度低等，参数arg由LiteOS SDK端云互通组件分配，用户填充，长度不能超过len。 |
-| int atiny_do_dev_reboot(void)                            | 设备复位。                                                   |
-| int atiny_do_factory_reset(void)                         | 厂商复位。                                                   |
-| int atiny_get_baterry_level(int* voltage)                | 获取电池剩余电量。                                           |
-| int atiny_get_memory_free(int* size)                     | 获取空闲内存大小。                                           |
-| int atiny_get_total_memory(int* size)                    | 获取总共内存大小。                                           |
-| int atiny_get_signal_strength(int* singal_strength)      | 获取信号强度。                                               |
-| int atiny_get_cell_id(long* cell_id)                     | 获取小区ID。                                                 |
-| int atiny_get_link_quality(int* quality)                 | 获取信道质量。                                               |
-| int atiny_write_app_write(void* user_data, int len)      | 业务数据下发。                                               |
-| int atiny_update_psk(char* psk_id, int len)              | 预置共享密钥更新。                                           |
-
-
-- lwm2m_poll()
-  该接口对设备接收到的LwM2M消息码流进行解析，并根据解析的结果进行相应的处理，包括执行IoT平台下发的命令等。接口实现如下。
-
-```C
-static int lwm2m_poll(handle_data_t *phandle, uint32_t *timeout)
-{
-    client_data_t *dataP;
-    int numBytes;
-    connection_t *connP;
-    lwm2m_context_t *contextP = phandle->lwm2m_context;
-    uint8_t *recv_buffer = phandle->recv_buffer;
-
-    dataP = (client_data_t *)(contextP->userData);
-    connP = dataP->connList;
-
-    while (connP != NULL)
-    {
-        //从消息接收缓存中取得消息码流recv_buffer
-        numBytes = lwm2m_buffer_recv(connP, recv_buffer, MAX_PACKET_SIZE, *timeout);
-        if (numBytes <= 0)
-        {
-            ATINY_LOG(LOG_INFO, "no packet arrived!");
-        }
-        else
-        {
-            output_buffer(stderr, recv_buffer, numBytes, 0);
-            //对消息码流recv_buffer进行解析并处理
-            lwm2m_handle_packet(contextP, recv_buffer, numBytes, connP);
-        }
-        connP = connP->next;
-    }
-
-    return ATINY_OK;
-}
-```
-其中，接口```lwm2m_buffer_recv()```中将会调用接口```atiny_net_recv_timeout()```，以从消息接收缓存中获取到IoT平台下发的消息码流。
-
-```C
-    ...
-    {
-        //从接收缓存中获取消息码流
-        ret = atiny_net_recv_timeout(connP->net_context, buffer, length, timeout);
-    }
-    /*根据返回值进行相应的处理*/
-    if((ret < 0) && (ret != TIME_OUT))
-    {
-        inc_connection_stat(connP, CONNECTION_RECV_ERR);
-    }
-    else
-    {
-        connP->errs[CONNECTION_RECV_ERR] = 0;
-    }
-    return ret;
-```
-与数据上报时的处理类似，若获取消息码流失败则调用接口```inc_connection_stat()```，其内部将会调用agent tiny注册的连接失败通知函数```atiny_connection_err_notify()```，进行重连处理等操作。
->说明：对于LiteOS SDK端云互通组件将IoT平台下发的消息码流存入设备消息缓存中的具体实现，以太网接入与无线接入两种方式之间存在较大的差异。以太网接入方式直接通过lwip协议套接字，将IoT平台消息码流存入接收缓存，其具体方法请开发者自行参考```atiny_net_recv_timeout()```内部实现，本章不再展开；而无线方式则是通过AT框架以及串口中断实现的。关于AT框架的相关知识将在下一章中进行介绍。
-
-再对消息解析与处理接口```lwm2m_handle_packet()```内部进行分析：
-
-```C
-    uint8_t coap_error_code = NO_ERROR;
-    static coap_packet_t message[1];
-    static coap_packet_t response[1];
-    LOG("Entering");
-    //解析消息码流buffer，得到协议版本，消息类型，消息方法与负载数据等信息，存入消息结构体message中
-    coap_error_code = coap_parse_message(message, buffer, (uint16_t)length);
-    ...
-    if (coap_error_code == NO_ERROR)
-    {
-        //根据解析得到的信息message进行相应的处理
-        coap_error_code = handle_request(contextP, fromSessionH, message, response);
-    }
-    ...
-```
-在接口```handle_request()```中，会再次对```message```进行细分。agent tiny可以根据最终的解析结果得到IoT平台具体的指令，比如“查询小区ID”，“点亮LED灯”，“重启设备”等等。这些命令均由```atiny_cmd_ioctl()```接口来具体执行。
-
-LiteOS SDK端云互通组件通过上面介绍的主循环体，不断地进行数据上报与命令处理。当调用LiteOS SDK端云互通组件去初始化接口```atiny_deinit()```时，退出循环。
-
-| 接口名                            | 描述                                                         |
-| --------------------------------- | ------------------------------------------------------------ |
-| void atiny_deinit(void* phandle); | LiteOS SDK端云互通组件的去初始化接口，由LiteOS SDK端云互通组件实现，设备调用。该接口为阻塞式接口，调用该接口时，会直到agent tiny主任务退出，资源释放完毕，该接口才会退出。<br>参数列表：参数```phandle```为调用```atiny_init()```获取到的LiteOS SDK端云互通组件句柄。<br>返回值：空 |
-
 <h3 id="4.3">4.3 小结</h3>
 
-本章从终端设备对接IoT平台的具体流程出发，分别从云侧和端侧详细地阐述了端云互通组件的开发流程。在云侧，本章介绍了创建应用，制作profile，部署编解码插件，注册设备的具体步骤；在端侧，本章从LiteOS SDK端云互通组件的入口函数开始，到端云互通组件的初始化，创建数据上报任务，最后进入主循环，将整个对接流程一步步地呈现给开发者。通过本章的内容，希望开发者能够掌握LiteOS SDK端云互通组件开发流程，进行IoT应用开发和调测。
+本章从终端设备对接IoT平台的具体流程出发，分别从云侧和端侧详细地阐述了端云互通组件的开发流程。在云侧，本章介绍了创建应用，制作profile，部署编解码插件，注册设备的具体步骤；在端侧，本章从LiteOS SDK端云互通组件的入口函数开始介绍，开发者只需要根据自己的具体业务，实现数据上报任务与命令响应接口，通过LiteOS SDK端云互通组件提供的接口，可以很容易地对接到IoT平台：
+
+```c
+    if(ATINY_OK != atiny_init(atiny_params, &g_phandle))  //初始化
+    {
+        return;
+    }
+    uwRet = creat_report_task();   //创建数据上报任务
+    if(LOS_OK != uwRet)
+    {
+        return;
+    }
+    (void)atiny_bind(device_info, g_phandle);   //主函数体
+```
+通过本章的内容，希望开发者能够掌握LiteOS SDK端云互通组件开发流程，进行IoT应用开发和调测。
 
 <h2 id="5">5.LiteOS端云互通组件实战演练</h2>
 
@@ -1224,7 +960,9 @@ void net_init(void)
     GATEWAY_ADDRESS[3] = 1;
 }
 ```
-> 注意：接口```net_init()```的调用在agent tiny入口函数```agent_tiny_entry()```之前，作用是完成lwip协议相关的初始化。
+接口```net_init()```的调用在agent tiny入口函数```agent_tiny_entry()```之前，作用是完成lwip协议相关的初始化。
+
+>sys_init.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[targets](https://github.com/LiteOS/LiteOS/tree/develop/targets)/[Cloud_STM32F429IGTx_FIRE](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE)/[Src](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE/Src)。
 
 **步骤3** 网口的mac地址修改。
 
@@ -1242,7 +980,7 @@ static int8_t eth_init(struct netif* netif)
     MACAddr[5] = 0x00;
 } 
 ```
-> 注意：接口```eth_init()```将在步骤2中的```net_init()```中被调用。
+> 注意：接口```eth_init()```将在步骤2中的```net_init()```中被调用。eth.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[targets](https://github.com/LiteOS/LiteOS/tree/develop/targets)/[Cloud_STM32F429IGTx_FIRE](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE)/[Src](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE/Src)。
 
 **步骤4** 设置云平台IP以及设备EP Name和PSK。
 
@@ -1256,6 +994,7 @@ char *g_endpoint_name_s = "11110006";
 unsigned char g_psk_value[16] = {0xef,0xe8,0x18,0x45,0xa3,0x53,0xc1,0x3c,0x0c,0x89,0x92,0xb3,0x1d,0x6b,0x6a,0x96};  
 #endif
 ```
+>agent_tiny_demo.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[demos](https://github.com/LiteOS/LiteOS/tree/develop/demos)/[agenttiny_lwm2m](https://github.com/LiteOS/LiteOS/tree/develop/demos/agenttiny_lwm2m)。
 
 **步骤5** 编译并运行程序。
 
@@ -1283,7 +1022,7 @@ struct Led_Light
 uint8_t lightvalue;
 …
 };
-extern get_led_lightvalue (void);
+extern get_led_lightvalue (void);  //获取传感器数据
 void app_data_report(void)
 {
     struct Led_Light light;
@@ -1305,6 +1044,7 @@ void app_data_report(void)
     }
 }
 ```
+>agent_tiny_demo.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[demos](https://github.com/LiteOS/LiteOS/tree/develop/demos)/[agenttiny_lwm2m](https://github.com/LiteOS/LiteOS/tree/develop/demos/agenttiny_lwm2m)。
 
 **步骤2** 查看设备状态
 
@@ -1378,7 +1118,7 @@ LiteOS SDK端云互通组件场景命令下发的调测过程：
 
 * **已送达：** 表示IoT平台已经将命令下发给设备，且收到设备返回的ACK消息。
 
-**步骤4** LiteOS SDK端云互通组件从消息缓存中获取消息码流并解析，根据解析结果执行```atiny_cmd_ioctl()```函数中对应的回调函数（实际调用```atiny_write_app_write()```处理下发命令）。
+**步骤4** LiteOS SDK端云互通组件从消息缓存中获取消息码流并解析，agent_tiny_cmd_ioctl.c中```atiny_cmd_ioctl()```接口对应的回调函数（实际调用```atiny_write_app_write()```处理下发命令）。
 
 ```C
 struct Led_Light
@@ -1396,6 +1136,8 @@ int atiny_write_app_write(void* user_data, int len)
     return ATINY_OK;
 }
 ```
+>agent_tiny_cmd_ioctl.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[demos](https://github.com/LiteOS/LiteOS/tree/develop/demos)/[agenttiny_lwm2m](https://github.com/LiteOS/LiteOS/tree/develop/demos/agenttiny_lwm2m)。
+
 ----**结束**
 
 <h3 id="5.3">5.3（参考）端云互通组件无线接入实例</h3>
@@ -1420,7 +1162,7 @@ AT 即Attention，AT指令集是从终端设备 (Terminal Equipment，TE)或者�
 
 结构图中AT Socket用于适配Atiny Socket接口，类似posix socket，AT Send用于调用at_cmd发送AT命令，AT Recv用于AT Analyse Task，通过LiteOS消息队列Post消息到用户接收任务。AT Analyse Task的主要功能是解析来自串口的消息，包括用户数据和命令的响应，串口USART主要是在中断或者DMA模式下接收数据，AT API Register是提供设备模块注册的API函数。
 
-结构图中深蓝色的部分是AT框架公共部分代码，开发者不需要修改；浅蓝色的部分是设备相关代码，开发者需要编写相应的设备代码，根据at_api_interface.h文件的定义，开发者只要实现以下函数接口即可：
+结构图中深蓝色的部分是AT框架公共部分代码，开发者不需要修改；浅蓝色的部分是设备相关代码，开发者需要编写相应的设备代码，根据at_api.h文件的定义，开发者只要实现以下函数接口即可：
 
 ```C
 typedef struct { 
@@ -1439,68 +1181,9 @@ typedef struct {
     int32_t  (*deinit)(void); 
 }at_adaptor_api;
 ```
+>at_api.h位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[include](https://github.com/LiteOS/LiteOS/tree/develop/include)/[at_frame](https://github.com/LiteOS/LiteOS/tree/develop/include/at_frame)。
+
 无论使用WIFI接入还是GPRS接入，开发者实现上述接口后，通过AT API Register进行注册，得到一组设备无关的对外接口，供上层的Agent Socket调用。
-
-在上一章中本文提到，终端设备通过接口```atiny_net_send()```将数据上报到IoT平台，接口```atiny_net_recv_timeout()```获取IoT平台下发的消息码流。上述两个接口均在atiny_socket.c中实现，在层次上位于结构图中Agent Socket层。首先，分析```atiny_net_send()```实现：
-
-```C
-...
-#elif defined(WITH_AT_FRAMEWORK)
-    ret = at_api_send(fd, buf, len); //调用AT API Register注册的发送接口
-...
-```
-在接口```at_api_send()```中，会调用上面开发者实现的```(*send)```函数，通过无线模组定义的AT指令将数据发送到IoT平台。
-
-当无线模组接收到IoT平台下发消息时，会将消息码流通过串口发送给MCU。因此，MCU需要创建串口中断：
-
-```C
-int32_t at_usart_init(void)
-{
-    UART_HandleTypeDef *usart = &at_usart;
-    at_usart_adapter(at_user_conf.usart_port);
-    usart->Instance = s_pUSART;
-    usart->Init.BaudRate = at_user_conf.buardrate;
-    usart->Init.WordLength = UART_WORDLENGTH_8B;
-    usart->Init.StopBits = UART_STOPBITS_1;
-    usart->Init.Parity = UART_PARITY_NONE;
-    usart->Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    usart->Init.Mode = UART_MODE_RX | UART_MODE_TX;
-    if(HAL_UART_Init(usart) != HAL_OK)
-    {
-        _Error_Handler(__FILE__, __LINE__);
-    }
-    __HAL_UART_CLEAR_FLAG(usart, UART_FLAG_TC);
-    LOS_HwiCreate(s_uwIRQn, 0, 0, at_irq_handler, 0); //创建串口中断
-    __HAL_UART_ENABLE_IT(usart, UART_IT_IDLE);
-    __HAL_UART_ENABLE_IT(usart, UART_IT_RXNE);
-
-    return AT_OK;
-}
-```
-在串口中断响应函数```at_irq_handler()```中，会将串口接收数据写入编号为```rid```的队列：
-```C
-    ...
-    if(LOS_QueueWriteCopy(at.rid, &recv_buf, sizeof(recv_buff), 0) != LOS_OK) //写入队列
-    {
-        g_disscard_cnt++;
-    }
-    ...
-```
-在AT框架创建的任务```at_recv_task()```中，会从上述队列中取出数据并进行初步的解析：
-```C
-    ret = LOS_QueueReadCopy(at.rid, &recv_buf, &rlen, wait_time); //读队列并写入recv_buf
-    ...
-    recv_len = read_resp(tmp, &recv_buf); 
-    ...
-    //对数据进行初步解析，并将解析后的数据存入消息接收缓存
-    ret = cloud_cmd_matching((int8_t *)tmp, recv_len); 
-```
-最终由接口```atiny_net_recv_timeout()```从消息接收缓存中取出消息码流：
-```C
-#elif defined(WITH_AT_FRAMEWORK)
-    ret = at_api_recv_timeout(fd, buf, len, NULL,NULL,timeout);
-```
-在接口```at_api_recv_timeout()```中，会调用上面开发者实现的```(*recv_timeout)```函数。得到的消息码流会在上一章中介绍的接口```lwm2m_poll()```中进行后续的各项处理，最终执行IoT平台下发的命令。
 
 <h4 id="5.3.3">5.3.3 移植WIFI模块-ESP8266</h4>
 
@@ -1527,6 +1210,7 @@ at_adaptor_api at_interface = {
     .deinit = esp8266_deinit, 
 };
 ```
+>esp8266.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[components](https://github.com/LiteOS/LiteOS/tree/develop/components)/[net](https://github.com/LiteOS/LiteOS/tree/develop/components/net)/[at_device](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device)/[wifi_esp8266](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device/wifi_esp8266)。
 
 **步骤3** 在main.c文件中，代码如下:
 
@@ -1537,6 +1221,7 @@ at_adaptor_api at_interface = {
      agent_tiny_entry();
 #endif
 ```
+>main.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[targets](https://github.com/LiteOS/LiteOS/tree/develop/targets)/[Cloud_STM32F429IGTx_FIRE](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE)/[Src](https://github.com/LiteOS/LiteOS/tree/develop/targets/Cloud_STM32F429IGTx_FIRE/Src)。
 
 **步骤4** 确保打开了编译宏。
 
@@ -1587,6 +1272,7 @@ int32_t esp8266_init()
 #define AT_CMD_CHECK_IP		"AT+CIPSTA_CUR?" 
 #define AT_CMD_CHECK_MAC	"AT+CIPSTAMAC_CUR?"
 ```
+>esp8266.h位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[components](https://github.com/LiteOS/LiteOS/tree/develop/components)/[net](https://github.com/LiteOS/LiteOS/tree/develop/components/net)/[at_device](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device)/[wifi_esp8266](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device/wifi_esp8266)。
 
 <h4 id="5.3.4">5.3.4 移植GSM模块-SIM900A</h4>
 
@@ -1612,6 +1298,7 @@ at_adaptor_api at_interface = {
 .deinit = sim900a_deinit, 
 };
 ```
+>sim900a.c位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[components](https://github.com/LiteOS/LiteOS/tree/develop/components)/[net](https://github.com/LiteOS/LiteOS/tree/develop/components/net)/[at_device](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device)/[gprs_sim900a](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device/gprs_sim900a)。
 
 **步骤3** 在main.c文件中，代码如下：
 
@@ -1687,6 +1374,7 @@ int32_t sim900a_send(int32_t id , const uint8_t  *buf, uint32_t len)
 #define AT_CMD_SEND		    "AT+CIPSEND" 
 #define AT_CMD_CLOSE		"AT+CIPCLOSE"
 ```
+>sim900a.h位于 [LiteOS](https://github.com/LiteOS/LiteOS)/[components](https://github.com/LiteOS/LiteOS/tree/develop/components)/[net](https://github.com/LiteOS/LiteOS/tree/develop/components/net)/[at_device](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device)/[gprs_sim900a](https://github.com/LiteOS/LiteOS/tree/develop/components/net/at_device/gprs_sim900a)。
 
 ### 注意事项
 
