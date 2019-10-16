@@ -53,9 +53,6 @@ typedef struct
     int   psk_len;
 }oc_server_t;
 
-/** @brief this is the message dealer module for the application*/
-typedef int (*fn_oc_lwm2m_msg_deal)(void *user_data,char *msg, int len);
-
 
 typedef enum
 {
@@ -63,6 +60,19 @@ typedef enum
     en_oc_boot_strap_mode_client_initialize,
     en_oc_boot_strap_mode_sequence,
 }en_oc_boot_strap_mode_t;
+
+
+typedef enum
+{
+    EN_OC_LWM2M_MSG_APPWRITE = 0,  ///< we have received the application command data
+    EN_OC_LWM2M_MSG_APPDISCOVER,
+    EN_OC_LWM2M_MSG_APPEXECUTE,
+    EN_OC_LWM2M_MSG_SERVERREBS,    ///<we  have received the rebootstrap command from the platform
+}en_oc_lwm2m_msg_t;
+
+/** @brief this is the message dealer module for the application*/
+typedef int (*fn_oc_lwm2m_msg_deal)(void *usr_data, en_oc_lwm2m_msg_t type, void *msg, int len);
+
 
 /** @brief this is the agent configuration */
 typedef struct
@@ -89,7 +99,7 @@ typedef struct
 }oc_lwm2m_opt_t;
 
 
-#if cfg_oc_lwm2m_enable
+#if CONFIG_OC_LWM2M_ENABLE
 /**
  *@brief the lwm2m agent should use this function to register the method for the application
  *
@@ -141,7 +151,6 @@ int oc_lwm2m_deconfig(void *context);
  *@return 0 success while <0 failed
  */
 int oc_lwm2m_init();
-
 
 #else   //not configure the lwm2m agent
 

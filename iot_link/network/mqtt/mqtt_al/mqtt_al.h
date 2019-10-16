@@ -120,6 +120,8 @@ typedef enum
 	en_mqtt_al_version_3_1_1,
 }en_mqtt_al_verison;
 
+
+
 /** @brief defines the paramter for the mqtt connect */
 typedef struct
 {
@@ -193,6 +195,7 @@ typedef enum
 #define cn_mqtt_al_con_code_err_u_p           4   ///< bad user name or password
 #define cn_mqtt_al_con_code_err_auth          5   ///< the client is not authorized
 #define cn_mqtt_al_con_code_err_unkown        -1  ///< unknown reason
+#define cn_mqtt_al_con_code_err_network      0x80 ///< network reason,you could try once more
 
 
 /** @brief defines for the mqtt subscribe code returned by the server */
@@ -227,7 +230,8 @@ typedef struct
 
 }mqtt_al_op_t;
 
-#if cfg_mqtt_enable
+
+#if CONFIG_MQTT_ENABLE
 //////////////////////API USED FOR THE MQTT APPLICAITON/////////////////////////
 
 /**
@@ -337,7 +341,7 @@ int mqtt_al_uninstall();
 
 #define mqtt_al_init()                         -1          ///< function compatible
 #define mqtt_al_deinit()                       -1 		   ///< function compatible
-#define mqtt_al_connect(handle, para)          NULL        ///< function compatible
+#define mqtt_al_connect(para)                   NULL        ///< function compatible
 #define mqtt_al_disconnect(handle)             -1          ///< function compatible
 #define mqtt_al_publish(handle, msg)           -1          ///< function compatible
 #define mqtt_al_subscribe(handle, subpara)     -1          ///< function compatible

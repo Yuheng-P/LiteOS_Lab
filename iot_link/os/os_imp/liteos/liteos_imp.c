@@ -38,6 +38,7 @@
  */
 
 //include the file which implement the function
+#include  <string.h>
 #include  <osal_imp.h>
 
 ///< this is implement for the task
@@ -226,6 +227,8 @@ static void __mem_free(void *addr)
 
 ///< sys time
 #include <los_sys.ph>
+
+extern UINT64 osKernelGetTickCount (void);
 static unsigned long long __get_sys_time()
 {
     return osKernelGetTickCount() * (OS_SYS_MS_PER_SECOND / LOSCFG_BASE_CORE_TICK_PER_SECOND);
@@ -237,6 +240,19 @@ __attribute__((weak)) int liteos_reboot()
     return 0;
 }
 
+
+//interrupt
+#include <los_hwi.h>
+static int __int_connect(int intnum, int prio, int mode, fn_interrupt_handle callback, void* arg)
+{
+	extern UINT32 LOS_HwiCreate(HWI_HANDLE_T  uwHwiNum, \
+	                            HWI_PRIOR_T   usHwiPrio, \
+	                            HWI_MODE_T    usMode, \
+	                            HWI_PROC_FUNC pfnHandler, \
+	                            HWI_ARG_T     uwArg \
+	                            );
+	return LOS_HwiCreate((HWI_HANDLE_T)intnum, (HWI_PRIOR_T)prio,(HWI_MODE_T) mode, (HWI_PROC_FUNC)callback, (HWI_ARG_T)arg);
+}
 
 static const tag_os_ops s_liteos_ops =
 {
@@ -260,6 +276,8 @@ static const tag_os_ops s_liteos_ops =
 
     .get_sys_time = __get_sys_time,
     .reboot = liteos_reboot,
+
+	.int_connect = __int_connect,
 };
 
 

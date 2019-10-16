@@ -43,58 +43,60 @@
 #include <driver.h>
 #include <sys/fcntl.h>
 
+#include <osal.h>
+
 //this file implement some demo to test the device module
 #define cn_testdriv_buf_len 256
 
 typedef struct
 {
-    s32_t refers;
+    int refers;
 }testdriv_cb_test_t;
 static testdriv_cb_test_t s_testdriv_cb_test;
 //cached only one frame here
 
-static bool_t testdriv_open(void *pri,s32_t flag)
+static bool_t testdriv_open(void *pri,int flag)
 {
-    printf("TESTDRIV:PRI:0x%08X OPEN\n\r",(u32_t)pri);
+    printf("TESTDRIV:PRI:0x%08X OPEN\n\r",(unsigned int)pri);
 
     s_testdriv_cb_test.refers++;
     return true;
 }
 static void testdriv_close(void *pri)
 {
-    printf("TESTDRIV:PRI:0x%08X CLOSE\n\r",(u32_t)pri);
+    printf("TESTDRIV:PRI:0x%08X CLOSE\n\r",(unsigned int)pri);
     s_testdriv_cb_test.refers--;
     return ;
 }
 
-static bool_t testdriv_write(void *pri,u32_t offset,u8_t *buf,s32_t len,u32_t timeout)
+static bool_t testdriv_write(void *pri,unsigned int offset,unsigned char *buf,int len,unsigned int timeout)
 {
-    printf("TESTDRIV:PRI:0x%08X WTRITE: buf:0x%08x len:%d timeout:%d\n\r",(u32_t)pri,(u32_t)buf,len,timeout);
+    printf("TESTDRIV:PRI:0x%08X WTRITE: buf:0x%08x len:%d timeout:%d\n\r",(unsigned int)pri,(unsigned int)buf,len,timeout);
     return len;
 }
 
-static bool_t testdriv_read(void *pri,u32_t offset,u8_t *buf,s32_t len,u32_t timeout)
+static bool_t testdriv_read(void *pri,unsigned int offset,unsigned char *buf,int len,unsigned int timeout)
 {
-    printf("TESTDRIV:PRI:0x%08X READ: buf:0x%08x len:%d timeout:%d\n\r",(u32_t)pri,(u32_t)buf,len,timeout);
+    printf("TESTDRIV:PRI:0x%08X READ: buf:0x%08x len:%d timeout:%d\n\r",(unsigned int)pri,(unsigned int)buf,len,timeout);
     return len;
 }
 
 
 static bool_t testdriv_init(void *pri)
 {
-    printf("TESTDRIV:PRI:0x%08X INIT\n\r",(u32_t)pri);
+    printf("TESTDRIV:PRI:0x%08X INIT\n\r",(unsigned int)pri);
     return true;
 }
 
 static void testdriv_deinit(void *pri)
 {
-    printf("TESTDRIV:PRI:0x%08X DEINIT\n\r",(u32_t)pri);
+    printf("TESTDRIV:PRI:0x%08X DEINIT\n\r",(unsigned int)pri);
     return ;
 }
 
-static bool_t testdriv_ioctl(void *pri,u32_t cmd, void *para,s32_t paralen)
+static bool_t testdriv_ioctl(void *pri,unsigned int cmd, void *para,int paralen)
 {
-    printf("TESTDRIV:PRI:0x%08X IOCTL:cmd:%d para:0x%08x paralen:%d \n\r",(u32_t)pri,cmd,(u32_t)para,paralen);
+    printf("TESTDRIV:PRI:0x%08X IOCTL:cmd:%d para:0x%08x paralen:%d \n\r",(unsigned int)pri,cmd,(unsigned int)para,paralen);
     return  true;
 }
 
@@ -121,11 +123,11 @@ OSDRIV_EXPORT(drivpara6,"dev1",(los_driv_op_t *)&s_testdriv,NULL,O_RDWR);
 #define CN_DEV_TEST_DRIMODE   //dri mode or filesystem mode
 
 static los_dev_t s_shell_opendev = NULL;
-static s32_t __driv_open(s32_t argc,const char *argv[]) //dirvopen drivname flag
+static int __driv_open(int argc,const char *argv[]) //dirvopen drivname flag
 {
     los_dev_t dev;
     const char *drivname = 0;
-    u32_t flag = 0;
+    unsigned int flag = 0;
     if(argc != 3 )
     {
         printf("paraerr");
@@ -168,10 +170,10 @@ static s32_t __driv_open(s32_t argc,const char *argv[]) //dirvopen drivname flag
 OSSHELL_EXPORT_CMD(__driv_open,"drivopen","drivopen name flag");
 
 
-static s32_t __driv_write(s32_t argc,const char *argv[]) //drivewrite string timeout
+static ssize_t __driv_write(int argc,const char *argv[]) //drivewrite string timeout
 {
-    s32_t ret;
-    u32_t timeout = 0;
+    ssize_t ret;
+    uint32_t timeout = 0;
 
     if(argc != 3)
     {
@@ -180,7 +182,7 @@ static s32_t __driv_write(s32_t argc,const char *argv[]) //drivewrite string tim
     }
 
     timeout = strtoul(argv[2],NULL,0);
-    ret = los_dev_write(s_shell_opendev,0,(u8_t *)argv[1],strlen(argv[1]),timeout);
+    ret = los_dev_write(s_shell_opendev,0,(const void *)argv[1],strlen(argv[1]),timeout);
     printf("write:%d bytes\n\r",ret);
 
     return 0;
@@ -189,12 +191,12 @@ static s32_t __driv_write(s32_t argc,const char *argv[]) //drivewrite string tim
 OSSHELL_EXPORT_CMD(__driv_write,"drivwrite","drivwrite string timeout");
 
 
-static s32_t __driv_read(s32_t argc,const char *argv[]) //driveread len timeout
+static ssize_t __driv_read(int argc,const char *argv[]) //driveread len timeout
 {
-    s32_t ret;
-    u32_t timeout = 0;
-    s32_t len ;
-    u8_t *buf;
+    ssize_t ret;
+    uint32_t timeout = 0;
+    size_t len ;
+    void *buf;
 
     if(argc != 3)
     {
@@ -205,19 +207,19 @@ static s32_t __driv_read(s32_t argc,const char *argv[]) //driveread len timeout
     len = strtoul(argv[1],NULL,0);
     timeout = strtoul(argv[2],NULL,0);
 
-    buf = malloc(len);
+    buf = osal_malloc(len);
     ret = los_dev_read(s_shell_opendev,0,buf,len,timeout);
     printf("read:%d bytes\n\r",ret);
-    free(buf);
+    osal_free(buf);
     return 0;
 }
 
 OSSHELL_EXPORT_CMD(__driv_read,"drivread","drivread len timeout");
 
-static s32_t __driv_ioctl(s32_t argc,const char *argv[]) //drivioctl cmd cmdpara
+static int __driv_ioctl(int argc,const char *argv[]) //drivioctl cmd cmdpara
 {
     bool_t ret;
-    u32_t cmd = 0;
+    unsigned int cmd = 0;
 
     if(argc != 3)
     {
@@ -243,9 +245,9 @@ static s32_t __driv_ioctl(s32_t argc,const char *argv[]) //drivioctl cmd cmdpara
 
 OSSHELL_EXPORT_CMD(__driv_ioctl,"drivioctl","drivioctl cmd cmdpara");
 
-static s32_t __driv_close(s32_t argc,const char *argv[]) //drivclose
+static int __driv_close(int argc,const char *argv[]) //drivclose
 {
-    s32_t ret;
+    int ret;
 
     ret = los_dev_close(s_shell_opendev);
     if(ret)

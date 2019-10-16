@@ -35,7 +35,7 @@
 #include <oc_mqtt_al.h>
 
 
-#if  cfg_oc_mqtt_enable
+#if  CONFIG_OC_MQTT_ENABLE
 
 static tag_oc_mqtt_ops *s_oc_mqtt = NULL;
 
@@ -194,12 +194,15 @@ cJSON *oc_mqtt_json_fmt_report(tag_oc_mqtt_report  *report)
     }
 
     ///< create the time service_data object and add it to the service
-    tmp = cJSON_CreateString(report->eventtime);
-    if(NULL == tmp)
+    if(NULL != report->eventtime)
     {
-        goto EXIT_CJSON_ERR;
+        tmp = cJSON_CreateString(report->eventtime);
+        if(NULL == tmp)
+        {
+            goto EXIT_CJSON_ERR;
+        }
+        cJSON_AddItemToObject(service,cn_service_time_name,tmp);
     }
-    cJSON_AddItemToObject(service,cn_service_time_name,tmp);
 
     ret = root;
     return ret;

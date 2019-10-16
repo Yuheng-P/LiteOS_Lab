@@ -185,7 +185,7 @@ bool_t  osal_semp_del(osal_semp_t semp)
 }
 
 
-void *osal_malloc(int size)
+void *osal_malloc(size_t size)
 {
     void *ret = NULL;
 
@@ -209,7 +209,7 @@ void  osal_free(void *addr)
     return;
 }
 
-void *osal_zalloc(int size)
+void *osal_zalloc(size_t size)
 {
     void *ret = NULL;
 
@@ -226,7 +226,7 @@ void *osal_zalloc(int size)
 
 }
 
-void *osal_realloc(void *ptr,int newsize)
+void *osal_realloc(void *ptr,size_t newsize)
 {
     void *ret = NULL;
 
@@ -238,7 +238,7 @@ void *osal_realloc(void *ptr,int newsize)
     return ret;
 }
 
-void *osal_calloc(int n, int size)
+void *osal_calloc(size_t n, size_t size)
 {
     void *p = osal_malloc(n * size);
     if(NULL != p)
@@ -327,6 +327,17 @@ int osal_reboot()  ///< maybe we should never come back
 }
 
 
+
+int osal_int_connect(int intnum, int prio, int mode, fn_interrupt_handle callback, void *arg)
+{
+	int ret = -1;
+	if((NULL != s_os_cb) &&(NULL != s_os_cb->ops) &&(NULL != s_os_cb->ops->int_connect))
+    {
+        ret = s_os_cb->ops->int_connect(intnum, prio, mode, callback, arg);
+    }
+
+	return ret;
+}
 
 int osal_init(void)
 {

@@ -41,6 +41,9 @@
 #include <oc_lwm2m_al.h>
 #include <agenttiny.h>
 
+
+///< uptils now, we don't support the multi handle mode
+
 typedef struct
 {
     atiny_device_info_t device_info;
@@ -49,6 +52,19 @@ typedef struct
     void               *agent_handle;
     void               *task_handle;
 }oc_lwm2m_imp_agent_t;
+
+static oc_lwm2m_imp_agent_t  *s_oc_lwm2m_agent = NULL;
+
+int lwm2m_agent_receive(en_oc_lwm2m_msg_t type,char *msg, int len)
+{
+    if((NULL != s_oc_lwm2m_agent) && (NULL != s_oc_lwm2m_agent->config_para.rcv_func))
+    {
+        s_oc_lwm2m_agent->config_para.rcv_func(s_oc_lwm2m_agent->config_para.usr_data,type,msg,len);
+    }
+
+    return 0;
+}
+
 
 
 static int __agent_task_entry(void *args)
@@ -72,6 +88,11 @@ static void *__agent_config(oc_config_param_t *param)
 
     oc_lwm2m_imp_agent_t  *ret = NULL;
 
+    if(NULL != s_oc_lwm2m_agent)
+    {
+        return ret;
+    }
+
     ret = osal_zalloc(sizeof(oc_lwm2m_imp_agent_t));
 
     if(NULL == ret)
@@ -94,10 +115,11 @@ static void *__agent_config(oc_config_param_t *param)
     atiny_params = &ret->tiny_param;
     atiny_params->server_params.binding = "UQ";
     atiny_params->server_params.life_time = 20;
-    atiny_params->server_params.storing_cnt = 0;
+    atiny_params->server_params.storing_cnt = 5;
 
     atiny_params->server_params.bootstrap_mode = param->boot_mode;
     atiny_params->server_params.hold_off_time = 10;
+    atiny_params->userData = param->usr_data;
 
     //pay attention: index 0 for iot server, index 1 for bootstrap server.
     iot_security_param = &(atiny_params->security_params[0]);
@@ -136,6 +158,8 @@ static void *__agent_config(oc_config_param_t *param)
         return ret;
     }
 
+    s_oc_lwm2m_agent= ret;
+
     return ret;
 }
 
@@ -143,11 +167,18 @@ static int __agent_deconfig(void *handle)
 {
     oc_lwm2m_imp_agent_t  *ret = handle;
 
+    if(NULL == handle)
+    {
+        return -1;
+    }
+
     atiny_deinit(ret->agent_handle);
 
     osal_task_kill(ret->task_handle);
 
     osal_free(ret);
+
+    s_oc_lwm2m_agent = NULL;
 
     return 0;
 }
@@ -162,8 +193,6 @@ static int __agent_report(void *handle, char *msg, int len, int timeout)
 
     oc_lwm2m_imp_agent_t  *agent = handle;
     data_report_t report_data;
-
-    printf("%s:report:len:%d  timeout:%d\n\r",__FUNCTION__,len,timeout);
 
     report_data.buf = (uint8_t *)msg;
     report_data.callback = ack_callback;

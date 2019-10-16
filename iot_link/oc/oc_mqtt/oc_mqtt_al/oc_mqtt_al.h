@@ -101,18 +101,12 @@ typedef enum
     en_oc_boot_strap_mode_client_initialize,
 }en_oc_boot_strap_mode_t;
 
-typedef enum
-{
-    en_oc_boot_strap_status_bs = 0,
-    en_oc_boot_strap_status_hub,
-    en_oc_boot_strap_status_max,
-}en_oc_boot_strap_status_t;
 
 
 typedef struct
 {
     en_oc_boot_strap_mode_t  boot_mode;
-    en_oc_boot_strap_status_t  boot_status;
+    unsigned short lifetime;
     const char   *server;            ///< cdp server address
     const char   *port;              ///< cdp server port
     mqtt_al_security_para_t security;///< only support crt mode now
@@ -127,8 +121,7 @@ typedef struct
         tag_oc_mqtt_device_static  s_device;
     }device_info;
 
-    oc_mqtt_msgdealer  msgdealer;///< when the agent receive any applciation data, please call this function
-    oc_mqtt_msgdealer  bsinfo_dealer;
+    oc_mqtt_msgdealer  msgdealer;      ///< when the agent receive any applciation data, please call this function
 }tag_oc_mqtt_config;
 
 ///////////////////////////MQTT AGENT INTERFACE////////////////////////////////
@@ -146,7 +139,7 @@ typedef struct
     fn_oc_mqtt_deconfig deconfig; ///< this function used for the deconfig
 }tag_oc_mqtt_ops;
 
-#if cfg_oc_mqtt_enable
+#if CONFIG_OC_MQTT_ENABLE
 /**
  *@brief the mqtt agent should use this function to register the method for the application
  *

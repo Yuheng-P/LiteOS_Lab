@@ -35,11 +35,11 @@
 ///< you must config the at module ,for the NB modules need the at
 
 
-
+#include <string.h>
 #include <at.h>
 #include <boudica150_oc.h>
 #include <oc_lwm2m_al.h>
-
+#include <osal.h>
 
 ///<  only support the bootstrap mode
 
@@ -71,13 +71,15 @@ typedef struct
 
 }boudica150_cb_t;
 static boudica150_cb_t   s_boudica150_oc_cb;
+static osal_mutex_t s_report_mutex;
+int wireless_stats[4] = {0};
 
 //bc95 common at command
 static bool_t boudica150_atcmd(const char *cmd,const char *index)
 {
     int ret = 0;
     ret = at_command((unsigned char *)cmd,strlen(cmd),index,NULL,0,cn_boudica150_cmd_timeout);
-    if(ret > 0)
+    if(ret >= 0)
     {
         return true;
     }
@@ -92,8 +94,8 @@ static bool_t boudica150_atcmd(const char *cmd,const char *index)
 static bool_t boudica150_atcmd_response(const char *cmd,const char *index,char *buf, int len)
 {
     int ret = 0;
-    ret = at_command((unsigned char *)cmd,strlen(cmd),index,(unsigned char *)buf,len,cn_boudica150_cmd_timeout);
-    if(ret > 0)
+    ret = at_command((unsigned char *)cmd,strlen(cmd),index,(char *)buf,len,cn_boudica150_cmd_timeout);
+    if(ret >= 0)
     {
         return true;
     }
@@ -130,12 +132,15 @@ static int boudica150_oc_report(void *handle,unsigned char *buf,int len, int tim
     {
         return ret;
     }
+    osal_mutex_lock(s_report_mutex);
     memset(s_boudica150_oc_cb.sndbuf, 0, cn_boudica150_cachelen);
     snprintf((char *)s_boudica150_oc_cb.sndbuf,cn_boudica150_cachelen,"%s%d,",cmd,len);
     ret = byte_to_hexstr((unsigned char *)buf, len, (char *)&s_boudica150_oc_cb.sndbuf[strlen((char *)s_boudica150_oc_cb.sndbuf)]);
     s_boudica150_oc_cb.sndbuf[strlen((char *)s_boudica150_oc_cb.sndbuf)]='\r';
+
     ret = at_command((unsigned char *)s_boudica150_oc_cb.sndbuf,strlen((char *)s_boudica150_oc_cb.sndbuf),index,NULL,0,timeout);
-    if(ret > 0)
+    osal_mutex_unlock(s_report_mutex);
+    if(ret >= 0)
     {
         ret = 0;
     }
@@ -168,12 +173,14 @@ static int hexstr_to_byte(const char *bufin, int len, char *bufout)
     return 0;
 }
 
-static int boudica150_rcvdeal(unsigned char *data,int len)
+static int boudica150_rcvdeal(void *args,void *msg,size_t len)
 {
     int ret = 0;
     int datalen;
-
+    char *data;
     char  *str;
+
+    data = msg;
     if(len <strlen(cn_boudica150_rcvindex))
     {
         printf("%s:invalid frame:%d byte:%s\n\r",__FUNCTION__,len,(char *)data);
@@ -209,8 +216,8 @@ static int boudica150_rcvdeal(unsigned char *data,int len)
 
     if(NULL != s_boudica150_oc_cb.oc_param.rcv_func)
     {
-        s_boudica150_oc_cb.oc_param.rcv_func(s_boudica150_oc_cb.oc_param.usr_data,\
-                                             s_boudica150_oc_cb.rcvbuf,datalen);
+        s_boudica150_oc_cb.oc_param.rcv_func(s_boudica150_oc_cb.oc_param.usr_data,EN_OC_LWM2M_MSG_APPWRITE,\
+                                             (char *)s_boudica150_oc_cb.rcvbuf,datalen);
     }
 
     return len;
@@ -229,6 +236,18 @@ static bool_t boudica150_set_echo(int enable)
     return ret;
 }
 
+static bool_t boudica150_set_regmode(int mode)
+{
+    bool_t ret ;
+    char cmd[64];
+    memset(cmd,0,64);
+    snprintf(cmd,64,"AT+QREGSWT=%d\r",mode);
+
+    ret = boudica150_atcmd(cmd,"OK");
+
+    return ret;
+}
+
 //use this function to do the module reboot
 static bool_t boudica150_reboot(void)
 {
@@ -237,7 +256,7 @@ static bool_t boudica150_reboot(void)
     boudica150_set_echo (0);
 
     boudica150_atcmd("AT+NRB\r","REBOOTING");
-    task_sleepms(10000); //wait for the module boot
+    osal_task_sleep(10000); //wait for the module boot
     //do the module reset
     boudica150_set_echo (0);
     boudica150_set_echo (0);
@@ -256,7 +275,7 @@ static bool_t boudica150_set_fun(int enable)  //unit second
 
     ret = boudica150_atcmd(cmd,"OK");
     //i think we should do some wait here
-    task_sleepms(2000);
+    osal_task_sleep(2000);
 
     return ret;
 }
@@ -434,11 +453,14 @@ static bool_t boudica150_set_nnmi(int enable)  //unit second
 
 
 //wait for the lwm2m observe
-static int urc_qlwevtind(unsigned char *data,int len)
+static int urc_qlwevtind(void *args,void *msg,size_t len)
 {
 
+    char *data;
     int index_str;
     int ind;
+
+    data = msg;
     index_str = strlen(cn_urc_qlwevtind);
 
     if(len > index_str)
@@ -468,7 +490,7 @@ static bool_t boudica150_check_observe(int time)  //unit second
             ret = true;
             break;
         }
-        task_sleepms(1000);
+        osal_task_sleep(1000);
     }
 
     return ret;
@@ -488,7 +510,7 @@ static bool_t boudica150_check_netattach(int time)  //unit second
             ret = true;
             break;
         }
-        task_sleepms(1000);
+        osal_task_sleep(1000);
     }
 
     return ret;
@@ -532,9 +554,9 @@ static bool_t boudica150_set_autoconnect(int enable)
 //use this function to set the band,which corresponding with YUNYINGSHANG AND MOZU
 static bool_t boudica150_boot(const char *plmn, const char *apn, const char *bands,const char *server,const char *port)
 {
-    memset(&s_boudica150_oc_cb,0,sizeof(s_boudica150_oc_cb));
-    at_oobregister(urc_qlwevtind,cn_urc_qlwevtind);
-    at_oobregister(boudica150_rcvdeal,cn_boudica150_rcvindex);
+    //memset(&s_boudica150_oc_cb,0,sizeof(s_boudica150_oc_cb));
+    at_oobregister("qlwevind",cn_urc_qlwevtind,strlen(cn_urc_qlwevtind),urc_qlwevtind,NULL);
+    at_oobregister("boudica150rcv",cn_boudica150_rcvindex,strlen(cn_boudica150_rcvindex),boudica150_rcvdeal,NULL);
 
     while(1)
     {
@@ -544,6 +566,8 @@ static bool_t boudica150_boot(const char *plmn, const char *apn, const char *ban
         boudica150_reboot();
 
         boudica150_set_echo (0);
+
+        boudica150_set_regmode(1);
 
         boudica150_set_cmee(1);
 
@@ -594,7 +618,6 @@ static void *boudica150_oc_config(oc_config_param_t *param)
                 s_boudica150_oc_cb.oc_param.app_server.address,s_boudica150_oc_cb.oc_param.app_server.port))
         {
             s_oc_handle = &s_boudica150_oc_cb;
-
             ret = s_oc_handle;
         }
     }
@@ -647,13 +670,64 @@ int boudica150_get_csq(int *value)
     return ret;
 }
 
+int* boudica150_check_nuestats(void)
+{
+    char cmd[64];
+    char resp[256];
+    char *str;
 
+    memset(cmd,0,64);
+    memset(resp,0,64);
+    snprintf(cmd,64,"AT+NUESTATS=CELL\r");
+
+    if (boudica150_atcmd_response(cmd,"NUESTATS:",resp,256) < 0)
+    {
+    	return NULL;
+    }
+    str = strstr(resp,"NUESTATS:");
+    if (str == NULL)
+    {
+    	return NULL;
+    }
+    int earfcn, physical_cellid, primary_cell, rsrp, rsrq, rssi, snr;  //for now only rsrp is needed, others for future use
+    sscanf(str,"NUESTATS:CELL,%d,%d,%d,%d,%d,%d,%d",&earfcn, &physical_cellid, &primary_cell, &rsrp, &rsrq, &rssi, &snr);
+    wireless_stats[0] = rsrp;
+
+    memset(cmd,0,64);
+    snprintf(cmd,64,"AT+NUESTATS\r");
+    if (boudica150_atcmd_response(cmd,"OK",resp,256) < 0)
+    {
+        return NULL;
+    }
+    str = strstr(resp,"ECL:");
+    if (str == NULL)
+    {
+    	return NULL;
+    }
+    sscanf(str,"ECL:%d",&wireless_stats[1]);
+
+    str = strstr(resp,"SNR:");
+    if (str == NULL)
+    {
+        return NULL;
+    }
+    sscanf(str,"SNR:%d",&wireless_stats[2]);
+
+    str = strstr(resp,"Cell ID:");
+    if (str == NULL)
+    {
+        return NULL;
+    }
+    sscanf(str,"Cell ID:%d",&wireless_stats[3]);
+
+    return wireless_stats;
+}
 
 const oc_lwm2m_opt_t  g_boudica150_oc_opt = \
 {
     .config = boudica150_oc_config,
     .deconfig = boudica150_oc_deconfig,
-    .report = boudica150_oc_report,
+    .report = (fn_oc_lwm2m_report)boudica150_oc_report,
 };
 
 
@@ -664,6 +738,8 @@ int boudica150_init(const char *plmn, const char *apn, const char *bands)
     s_boudica150_oc_cb.plmn = plmn;
     s_boudica150_oc_cb.apn = apn;
     s_boudica150_oc_cb.bands = bands;
+
+    osal_mutex_create(&s_report_mutex);
 
     ret = oc_lwm2m_register("boudica150",&g_boudica150_oc_opt);
 

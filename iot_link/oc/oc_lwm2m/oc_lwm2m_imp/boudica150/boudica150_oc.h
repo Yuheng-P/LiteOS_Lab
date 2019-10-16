@@ -36,9 +36,9 @@
 #ifndef __BOUDICA150_OC_H
 #define __BOUDICA150_OC_H
 
-#define CFG_BOUDICA150_ENABLE  1
+#define CONFIG_OC_LWM2M_BOUDICA150_ENABLE  1 //only for test
 
-#if  CFG_BOUDICA150_ENABLE
+#if  CONFIG_OC_LWM2M_BOUDICA150_ENABLE
 
 /**
  *@brief this function should be called after oc_lwm2m_agent_init
@@ -59,11 +59,13 @@ int boudica150_init(const char *plmn, const char *apn, const char *bands);
  */
 int boudica150_get_csq(int *value);
 
+int *boudica150_check_nuestats(void);
+
 #else
 
 #define boudica150_init(plmn,apn,bands)    -1
 #define boudica150_get_csq(value)          -1
-
+#define boudica150_check_nuestats(void)    NULL
 #endif
 
 

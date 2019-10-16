@@ -1,5 +1,5 @@
 ##########################################################################################################################
-# STM32F429IGTx_FIRE GCC compiler Makefile
+# LINUX GCC compiler Makefile
 ##########################################################################################################################
 
 # ------------------------------------------------
@@ -37,6 +37,10 @@ BIN       = $(OBJCOPY) -O binary -S
 PROJECTBASE = $(abspath $(CURDIR))
 TOP_DIR     = $(abspath $(PROJECTBASE)/../../..)
 
+#this is for IoT Studio automatic generating kconfig compatibility
+ifndef SDK_DIR
+    SDK_DIR=$(abspath $(PROJECTBASE)/../../..)
+endif
 
 #######################################
 # paths
