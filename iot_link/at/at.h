@@ -43,7 +43,6 @@
 
 typedef int (*fn_at_oob)(void *args,void *data,size_t datalen);
 
-#if  CONFIG_AT_ENABLE
 
 /**
  * @brief: use this function to do the at client framwork initialized
@@ -81,14 +80,7 @@ int at_command(const void *cmd, size_t cmdlen,const char *index,\
 
 int at_streammode_set(int mode);
 
-#else
 
-#define at_init(devname)                                               -1
-#define at_oobregister(name,index,lenc,func,args)                      -1
-#define at_command(cmd,cmdlen,index,respbuf,respbuflen,timeout)        -1
-#define at_streammode_set(mode)                                        -1
-
-#endif
 
 
 #endif

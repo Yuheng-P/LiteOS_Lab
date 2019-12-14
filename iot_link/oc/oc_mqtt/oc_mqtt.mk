@@ -16,9 +16,9 @@ ifeq ($(CONFIG_OC_MQTT_ENABLE), y)
     C_DEFS += $(oc_mqtt_defs)
     
     ifeq ($(CONFIG_OC_MQTT_TYPE),"soft")
-		include $(iot_link_root)/oc/oc_mqtt/atiny_mqtt/atiny_mqtt.mk
-    else ifeq ($(CONFIG_OC_MQTT_TYPE),"ec20")
-    	include $(iot_link_root)/oc/oc_mqtt/ec20_oc/ec20_oc.mk
+		include $(iot_link_root)/oc/oc_mqtt/oc_mqtt_tiny/oc_mqtt_tiny.mk
+    else ifeq ($(CONFIG_OC_MQTT_TYPE),"ec2x_oc")
+    	include $(iot_link_root)/oc/oc_mqtt/ec2x_oc/ec2x_oc.mk
     endif 
 
 endif
