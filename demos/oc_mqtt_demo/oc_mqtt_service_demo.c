@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------------
- * Copyright (c) <2018>, <Huawei Technologies Co., Ltd>
+ * Copyright (c) <2016-2018>, <Huawei Technologies Co., Ltd>
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -31,11 +31,6 @@
  * Import, export and usage of Huawei LiteOS in any manner by you shall be in compliance with such
  * applicable export control laws and regulations.
  *---------------------------------------------------------------------------*/
-/**
- *  DATE                AUTHOR      INSTRUCTION
- *  2019-12-13 10:19  zhangqianfu  The first version  
- *
- */
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -46,18 +41,44 @@
 #include <oc_mqtt_al.h>
 #include <oc_mqtt_assistant.h>
 
-/* brief : the oceanconnect platform only support the ca_crt up tills now*/
-/** the address product_id device_id password crt is only for the test  */
+#include <oc_service.h>
+
+///< ANYWAY, YOU COULD CONFIG IT TO THE ONE MODE,ALL THE INFORMATION IS JUST FOR THE TEST
+#if CONFIG_OC_MQTT_DEMO_BS
+
+///< the device bootstrap center
+
+#define CN_SERVER_IPV4         "119.3.251.30"
+#define CN_SERVER_PORT         "8883"
+#define CN_EP_NODEID           "mqtt_sdk03"
+#define CN_EP_PASSWD           "f62fcf47d62c4ed18913"
+#define CN_DEMO_MODE            en_oc_mqtt_mode_bs_static_nodeid_hmacsha256_notimecheck_json
+
+#else
+
+///< the iot device access center
+//#define CN_SERVER_IPV4         "119.3.248.253"
+//#define CN_SERVER_PORT         "8883"
+//#define CN_EP_NODEID           "mqtt_sdk03"
+//#define CN_EP_PASSWD           "f62fcf47d62c4ed18913"
+
+///< the iot develop center
+#define CN_SERVER_IPV4         "49.4.93.24"
+#define CN_SERVER_PORT         "8883"
+#define CN_EP_NODEID           "mqtt_service_test"
+#define CN_EP_PASSWD           "44089b6e36a66626af31"
+
+
+#define CN_DEMO_MODE            en_oc_mqtt_mode_nobs_static_nodeid_hmacsha256_notimecheck_json
+
+#endif
 
 #define DEFAULT_LIFETIME            60                 ///< the platform need more
-#define DEFAULT_SERVER_IPV4         "119.3.251.30"     ///<  server ip address
-#define DEFAULT_SERVER_PORT         "8883"             ///<  server mqtt service port
-#define CN_MQTT_EP_NOTEID           "mqtt_sdk81"
-#define CN_MQTT_EP_PASSWD           "f62fcf47d62c4ed18913"
 
 //if your command is very fast,please use a queue here--TODO
 static queue_t *s_queue_rcvmsg = NULL;   ///< this is used to cached the message
 
+static service_id svc;
 typedef struct
 {
     int        qos;
@@ -152,9 +173,10 @@ static int  oc_cmd_normal(demo_msg_t *demo_msg)
         buf = cJSON_PrintUnformatted(response_msg);
         if(NULL != buf)
         {
-            ret = oc_mqtt_report((uint8_t *)buf,strlen(buf),en_mqtt_al_qos_1);
-            printf("%s:RESPONSE:mid:%d err_int:%d retcode:%d \r\n",__FUNCTION__,\
-                    mid_int,err_int,ret);
+        	oc_message msg;
+        	msg.buf = buf;
+        	msg.type = oc_report;
+        	service_send(svc, &msg);
 
             osal_free(buf);
         }
@@ -167,26 +189,26 @@ static int  oc_cmd_normal(demo_msg_t *demo_msg)
 
 static int  oc_report_normal(void)
 {
-    int ret = -1;
+    int ret = 0;
     cJSON *root = NULL;
     char  *buf = NULL;
     tag_oc_mqtt_report  report;
     tag_key_value_list  lst;
-    static int leftpower = 1;
+    static int value = 1;
     static int times = 1;
 
 
-    leftpower = (leftpower + 7 )%100;
+    value = (value + 7 )%100;
 
-    lst.item.name = "radioValue";
-    lst.item.buf = (char *)&leftpower;
-    lst.item.len = sizeof(leftpower);
+    lst.item.name = "batteryLevel";
+    lst.item.buf = (char *)&value;
+    lst.item.len = sizeof(value);
     lst.item.type = en_key_value_type_int;
     lst.next = NULL;
 
     report.hasmore = en_oc_mqtt_has_more_no;
     report.paralst= &lst;
-    report.serviceid = "DeviceStatus";
+    report.serviceid = "Battery";
     report.eventtime = NULL;
 
     root = oc_mqtt_json_fmt_report(&report);
@@ -195,15 +217,18 @@ static int  oc_report_normal(void)
         buf = cJSON_PrintUnformatted(root);
         if(NULL != buf)
         {
-            ret = oc_mqtt_report((uint8_t *)buf,strlen(buf),en_mqtt_al_qos_1);
-            printf("%s:REPORT:times:%d:power:%d retcode:%d \r\n",__FUNCTION__,times++,leftpower,ret);
+        	service_id svc = service_open("oc mqtt service");
+        	oc_message msg;
+        	msg.buf = buf;
+        	msg.type = oc_report;
+        	service_send(svc, &msg);
+
             osal_free(buf);
         }
-
         cJSON_Delete(root);
     }
 
-    return ret;
+    return 0;
 }
 
 
@@ -227,58 +252,43 @@ static int task_rcvmsg_entry( void *args)
     return 0;
 }
 
-
-
-int iot_init()
+static int task_reportmsg_entry(void *args)
 {
-    s_queue_rcvmsg = queue_create("queue_rcvmsg",2,1);
-    osal_task_create("task_rcvmsg",task_rcvmsg_entry,NULL,0x1000,NULL,8);
-    return 0;
-}
-
-int iot_connect()
-{
-    int ret = -1;
-
+    int ret;
     oc_mqtt_config_t config;
-
-    config.boot_mode = en_oc_mqtt_mode_bs_static_nodeid_hmacsha256_notimecheck_json;
+    config.boot_mode = CN_DEMO_MODE;
     config.msg_deal = app_msg_deal;
     config.msg_deal_arg = NULL;
     config.lifetime = DEFAULT_LIFETIME;
-    config.server_addr = DEFAULT_SERVER_IPV4;
-    config.server_port = DEFAULT_SERVER_PORT;
-    config.id = CN_MQTT_EP_NOTEID;
-    config.pwd= CN_MQTT_EP_PASSWD;
+    config.server_addr = CN_SERVER_IPV4;
+    config.server_port = CN_SERVER_PORT;
+    config.id = CN_EP_NODEID;
+    config.pwd= CN_EP_PASSWD;
     config.sec_type = en_mqtt_al_security_cas;
 
-    ret = oc_mqtt_config(&config);
+    oc_message msg;
+    msg.buf = &config;
+    msg.type = oc_config;
+    service_send(svc, &msg);
 
-    if(((ret == en_oc_mqtt_err_ok))|| (ret== en_oc_mqtt_err_configured))
+    while(1)  //do the loop here
     {
-        ret = 0;
+        oc_report_normal();
+        osal_task_sleep(1000);
     }
-    return ret;
+    return 0;
 }
 
-int iot_send()
+int standard_app_demo_main()
 {
-    int ret = -1;
+    s_queue_rcvmsg = queue_create("queue_rcvmsg",2,1);
 
-    ret =oc_report_normal();
+    oc_service_init("oc mqtt service");
+    svc = service_open("oc mqtt service");
 
-    return ret;
+    osal_task_create("demo_reportmsg",task_reportmsg_entry,NULL,0x800,NULL,8);
+
+    osal_task_create("demo_rcvmsg",task_rcvmsg_entry,NULL,0x800,NULL,8);
+
+    return 0;
 }
-
-int iot_disconnect()
-{
-    int ret = -1;
-
-    ret = oc_mqtt_deconfig();
-
-    return ret;
-}
-
-
-
-

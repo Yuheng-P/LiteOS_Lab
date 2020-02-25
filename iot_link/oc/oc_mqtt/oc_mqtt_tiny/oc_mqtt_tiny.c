@@ -37,8 +37,9 @@
  *
  *
  *   *
- *  1, the data encode only support the json mode
- *  2, the passwd only support the no check time mode
+ *  1, only support CRT tls mode
+ *  2, the data encode only support the json mode
+ *  3, the passwd only support the no check time mode
  *
  */
 #include <stdint.h>
@@ -135,6 +136,7 @@ typedef enum
 typedef struct
 {
     oc_mqtt_config_t        config;
+    mqtt_al_security_para_t security;
     oc_mqtt_para_t          mqtt_para;
     union{
 
@@ -296,7 +298,7 @@ static void bs_msg_default_deal(void *arg,mqtt_al_msgrcv_t *msg)
    return;
 }
 
-static char *topic_fmt(const char *fmt, const char *arg)
+static char *topic_fmt(char *fmt, char *arg)
 {
     char *ret = NULL;
     int len =  0;
@@ -312,7 +314,7 @@ static char *topic_fmt(const char *fmt, const char *arg)
     return ret;
 }
 
-static char *clientid_fmt(const char *fmt, const char *id, const char *salt_time)
+static char *clientid_fmt(char *fmt, char *id, char *salt_time)
 {
     char *ret = NULL;
     int len =  0;
@@ -405,11 +407,19 @@ static int config_parameter_clone(oc_mqtt_tiny_cb_t *cb,oc_mqtt_config_t *config
             break;
     }
 
-    cb->config.security.type = config->security.type;
-    if(config->security.type == EN_DTLS_AL_SECURITY_TYPE_CERT)
+    switch (config->sec_type)
     {
-        cb->config.security.u.cert.server_ca  = (uint8_t  *)s_oc_mqtt_ca_crt;
-        cb->config.security.u.cert.server_ca_len = sizeof(s_oc_mqtt_ca_crt) ;
+        case en_mqtt_al_security_none:
+            cb->security.type = en_mqtt_al_security_none;
+            break;
+        case en_mqtt_al_security_cas:
+            cb->security.type = en_mqtt_al_security_cas;
+            cb->security.u.cas.ca_crt.data = (char *)s_oc_mqtt_ca_crt;
+            cb->security.u.cas.ca_crt.len = sizeof(s_oc_mqtt_ca_crt) ;
+            break;
+        default:
+            return ret;
+            break;
     }
 
     cb->config.boot_mode  = config->boot_mode;
@@ -452,7 +462,7 @@ static int oc_mqtt_para_release(oc_mqtt_tiny_cb_t *cb)
 static int oc_mqtt_para_gernerate(oc_mqtt_tiny_cb_t *cb)
 {
     int ret = en_oc_mqtt_err_ok;;
-    uint8_t hmac[CN_HMAC_LEN] = {0};
+    uint8_t hmac[CN_HMAC_LEN];
 
     struct tm *date;
     time_t time_now;
@@ -563,7 +573,7 @@ static int dmp_connect(oc_mqtt_tiny_cb_t *cb)
 
     conpara.cleansession = 1;
     conpara.keepalivetime = cb->config.lifetime;
-    conpara.security = &cb->config.security;
+    conpara.security = &cb->security;
 
     conpara.serveraddr.data = (char *)cb->mqtt_para.server_addr;
     conpara.serveraddr.len = strlen(conpara.serveraddr.data);
@@ -577,34 +587,31 @@ static int dmp_connect(oc_mqtt_tiny_cb_t *cb)
     printf("oc_mqtt_connect:user:%s passwd:%s \n\r",cb->mqtt_para.mqtt_user,cb->mqtt_para.mqtt_passwd);
     cb->mqtt_para.mqtt_handle = mqtt_al_connect(&conpara);
 
-
-    if(NULL != cb->mqtt_para.mqtt_handle)
+    if(0 == conpara.conret)
     {
         ret = en_oc_mqtt_err_ok;
     }
+    else if(2 == conpara.conret)
+    {
+        ret = en_oc_mqtt_err_conclientid;
+    }
+    else if(3 == conpara.conret)
+    {
+        ret = en_oc_mqtt_err_conserver;
+    }
+    else if(4 == conpara.conret)
+    {
+        ret = en_oc_mqtt_err_conuserpwd;
+    }
+    else if(5 == conpara.conret)
+    {
+        ret = en_oc_mqtt_err_conclient;
+    }
     else
     {
-        if(cn_mqtt_al_con_code_err_clientID == conpara.conret)
-        {
-            ret = en_oc_mqtt_err_conclientid;
-        }
-        else if(cn_mqtt_al_con_code_err_netrefuse == conpara.conret)
-        {
-            ret = en_oc_mqtt_err_conserver;
-        }
-        else if(cn_mqtt_al_con_code_err_u_p == conpara.conret)
-        {
-            ret = en_oc_mqtt_err_conuserpwd;
-        }
-        else if(cn_mqtt_al_con_code_err_auth == conpara.conret)
-        {
-            ret = en_oc_mqtt_err_conclient;
-        }
-        else
-        {
-            ret = en_oc_mqtt_err_network;
-        }
+        ret = en_oc_mqtt_err_network;
     }
+
     printf("oc_mqtt_connect:recode:%d :%s\n\r",ret,ret==en_oc_mqtt_err_ok?"SUCCESS":"FAILED");
 
     return ret;

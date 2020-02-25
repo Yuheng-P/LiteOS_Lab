@@ -209,7 +209,7 @@ static int __cmd_clear(void)
 }
 
 //check if the data received is the at command need
-static int  __cmd_match(const void *data,size_t len)
+static int  __cmd_match(void *data,size_t len)
 {
     int  ret = -1;
     int  cpylen;
@@ -355,25 +355,16 @@ int  at_command(const void *cmd,size_t cmdlen,const char *index,void *respbuf,\
         if(0 == ret)
         {
             ret = __cmd_send(cmd,cmdlen,timeout);
-            if(0 == ret)
+            if(osal_semp_pend(g_at_cb.cmd.respsync,timeout))
             {
-                if(osal_semp_pend(g_at_cb.cmd.respsync,timeout))
-                {
-                    ret = g_at_cb.cmd.respdatalen;
-                }
-                else
-                {
-                    ret = -1;
-                }
+                ret = g_at_cb.cmd.respdatalen;
             }
             else
             {
                 ret = -1;
             }
-
             __cmd_clear();
         }
-
     }
     else
     {
@@ -429,7 +420,11 @@ instruction  :if you want to use the at frame work, please call this function
 int at_init(const char *devname)
 {
     int ret = -1;
-
+    if(NULL == devname)
+    {
+        printf("%s:parameters error\n\r",__FUNCTION__);
+        goto EXIT_PARA;
+    }
     memset(&g_at_cb,0,sizeof(g_at_cb));
     g_at_cb.devname = devname;
 
@@ -474,6 +469,7 @@ EXIT_RESPSYNC:
     osal_semp_del(&g_at_cb.cmd.cmdsync);
     g_at_cb.cmd.cmdsync = cn_semp_invalid;
 EXIT_CMDSYNC:
+EXIT_PARA:
     return ret;
 }
 
@@ -548,11 +544,11 @@ static int shell_atdebug(int argc,const char *argv[])
 
     if(0 == strcmp(argv[1],"rx"))
     {
-        g_at_cb.rxdebugmode = (unsigned int) mode;
+        g_at_cb.rxdebugmode = mode;
     }
     else if(0 == strcmp(argv[1],"tx"))
     {
-        g_at_cb.txdebugmode = (unsigned int ) mode;
+        g_at_cb.txdebugmode = mode;
     }
     else
     {

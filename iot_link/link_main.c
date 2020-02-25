@@ -46,6 +46,13 @@
 #endif
 
 
+#ifdef WITH_DTLS
+#include <dtls_interface.h>
+
+#endif
+
+
+
 #define  CN_LINK_VERSION_MAJOR      1
 #define  CN_LINK_VERSION_MINOR      3
 #define  CN_LINK_VERSION_FEATURE    1
@@ -121,6 +128,7 @@ int link_main(void *args)
     #define CONFIG_AT_DEVICENAME  "atdev"
     #endif
 
+
     ///< install the at framework for the link
     uart_at_init(CONFIG_AT_BAUDRATE);
     at_init(CONFIG_AT_DEVICENAME);
@@ -151,9 +159,8 @@ int link_main(void *args)
 #endif
 
 //////////////////////////  DTLS PROTOCOL  /////////////////////////////////////
-#ifdef CONFIG_DTLS_ENABLE
-    #include <dtls_al.h>
-    dtls_al_init();
+#ifdef WITH_DTLS
+    dtls_init();
 #endif
 
 //////////////////////////  MQTT PROTOCOL  /////////////////////////////////////

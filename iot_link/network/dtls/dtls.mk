@@ -9,8 +9,6 @@ ifeq ($(CONFIG_DTLS_ENABLE), y)
 
     DTLS_AL_INC = -I $(iot_link_root)/network/dtls/dtls_al
     C_INCLUDES += $(DTLS_AL_INC)
-    
-    C_DEFS += -D CONFIG_DTLS_ENABLE=1
 
     ifeq ($(CONFIG_DTLS_TYPE), "mbedtls_psk")
       include $(iot_link_root)/network/dtls/mbedtls/mbedtls.mk

@@ -384,7 +384,7 @@ service_id service_create (const char * name, int (* handler) (void *),
     service->head       = NULL;
     service->tail       = NULL;
     service->name       = name;
-    service->task       = task;
+    service->task       = NULL;
     service->exit       = false;
     service->stack_size = stack_size;
     service->prio       = prio;

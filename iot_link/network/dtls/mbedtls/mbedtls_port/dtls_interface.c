@@ -75,6 +75,8 @@
 #endif
 
 
+
+
 mbedtls_ssl_context *dtls_ssl_new(dtls_establish_info_s *info, char plat_type)
 {
     int ret;
@@ -90,7 +92,7 @@ mbedtls_ssl_context *dtls_ssl_new(dtls_establish_info_s *info, char plat_type)
 #endif
 
     const char *pers = "ssl_client";
-    int transport;
+
     ssl       = mbedtls_calloc(1, sizeof(mbedtls_ssl_context));
     conf      = mbedtls_calloc(1, sizeof(mbedtls_ssl_config));
     entropy   = mbedtls_calloc(1, sizeof(mbedtls_entropy_context));
@@ -126,14 +128,8 @@ mbedtls_ssl_context *dtls_ssl_new(dtls_establish_info_s *info, char plat_type)
 
     if (info->udp_or_tcp == MBEDTLS_NET_PROTO_UDP)
     {
-        transport = MBEDTLS_SSL_TRANSPORT_DATAGRAM;
         timer = mbedtls_calloc(1, sizeof(mbedtls_timing_delay_context));
-        if (NULL == timer)
-            goto exit_fail;
-    }
-    else
-    {
-        transport = MBEDTLS_SSL_TRANSPORT_STREAM;
+        if (NULL == timer) goto exit_fail;
     }
 
     mbedtls_ssl_init(ssl);
@@ -158,7 +154,21 @@ mbedtls_ssl_context *dtls_ssl_new(dtls_establish_info_s *info, char plat_type)
 
     MBEDTLS_LOG("setting up the SSL structure");
 
-    ret = mbedtls_ssl_config_defaults(conf,plat_type,transport,MBEDTLS_SSL_PRESET_DEFAULT);
+    if (info->udp_or_tcp == MBEDTLS_NET_PROTO_UDP)
+    {
+        ret = mbedtls_ssl_config_defaults(conf,
+                                          plat_type,
+                                          MBEDTLS_SSL_TRANSPORT_DATAGRAM,
+                                          MBEDTLS_SSL_PRESET_DEFAULT);
+    }
+    else
+    {
+        ret = mbedtls_ssl_config_defaults(conf,
+                                          plat_type,
+                                          MBEDTLS_SSL_TRANSPORT_STREAM,
+                                          MBEDTLS_SSL_PRESET_DEFAULT);
+    }
+
     if (ret != 0)
     {
         MBEDTLS_LOG("mbedtls_ssl_config_defaults failed: -0x%x", -ret);
@@ -297,7 +307,7 @@ exit_fail:
 
 static inline uint32_t dtls_gettime()
 {
-    return (uint32_t)(osal_sys_time() );
+    return (uint32_t)(osal_sys_time() / 1000);
 }
 
 int dtls_shakehand(mbedtls_ssl_context *ssl, const dtls_shakehand_info_s *info)
@@ -323,11 +333,6 @@ int dtls_shakehand(mbedtls_ssl_context *ssl, const dtls_shakehand_info_s *info)
     if (MBEDTLS_SSL_IS_CLIENT == info->client_or_server)
     {
         ret = mbedtls_net_connect(server_fd, info->u.c.host, info->u.c.port, info->udp_or_tcp);
-        if( 0 != ret)
-        {
-            ret = MBEDTLS_ERR_NET_CONNECT_FAILED;
-            goto exit_fail;
-        }
     }
     else
     {
@@ -438,11 +443,11 @@ void dtls_ssl_destroy(mbedtls_ssl_context *ssl)
     ret = 0;
 
 
-    if (NULL != conf)
+    if (conf)
     {
         ctr_drbg   = conf->p_rng;
 
-        if (NULL !=ctr_drbg)
+        if (ctr_drbg)
         {
             entropy =  ctr_drbg->p_entropy;
         }
@@ -460,12 +465,12 @@ void dtls_ssl_destroy(mbedtls_ssl_context *ssl)
 #endif
     }
 
-    if (NULL != server_fd)
+    if (server_fd)
     {
         mbedtls_net_free(server_fd);
     }
 
-    if (NULL != conf)
+    if (conf)
     {
         mbedtls_ssl_config_free(conf);
         mbedtls_free(conf);

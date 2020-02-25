@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------------
- * Copyright (c) <2018>, <Huawei Technologies Co., Ltd>
+ * Copyright (c) <2020>, <Huawei Technologies Co., Ltd>
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
@@ -32,123 +32,80 @@
  * applicable export control laws and regulations.
  *---------------------------------------------------------------------------*/
 
-#include <oc_mqtt_al.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 
-static oc_mqtt_t *s_oc_mqtt = NULL;
-///////////////////////OC AGENT INSTALL INTERFACE///////////////////////////////
-int oc_mqtt_register(const oc_mqtt_t *opt)
+#include <osal.h>
+#include <oc_coap_al.h>
+//
+#include "oc_service.h"
+
+/* macros */
+
+
+/* typedefs */
+
+
+/* locals */
+
+static void *s_coap_service_handle = NULL;
+
+static int __oc_service_handler (void * arg)
 {
-    int ret = en_oc_mqtt_err_system;
-
-    if(NULL != opt)
+    oc_message* msg = (oc_message*) arg;
+    //printf("message is %s\r\n", msg->buf);
+    int ret;
+    switch (msg->type)
     {
-        s_oc_mqtt = (oc_mqtt_t *) opt;
-        ret = en_oc_mqtt_err_ok;
+        case oc_config:
+        {
+        	printf("this is oc_config service!\r\n");
+
+        	oc_config_param_t* config = (oc_config_param_t *)(msg->buf);
+        	s_coap_service_handle = oc_coap_config(config);
+        	if(NULL == s_coap_service_handle)
+        	{
+        	    printf("config err\r\n");
+        	    return -1;
+        	}
+        }
+        break;
+        case oc_report:
+        {
+            printf("this is oc_report service!\r\n");
+
+            char* data = (char *)(msg->buf);
+            ret = oc_coap_report(s_coap_service_handle, (char *)data, msg->len);
+
+            if((ret != 0))
+            {
+                printf("report:err :code:%d\r\n",ret);
+                return -1;
+            }
+        }
+        break;
+        case oc_deconfig:
+        {
+            printf("this is oc_deconfig service!\r\n");
+            oc_coap_deconfig(s_coap_service_handle);
+        }
+        break;
     }
 
-    return ret;
-}
-
-//////////////////////////APPLICATION INTERFACE/////////////////////////////////
-int oc_mqtt_config(oc_mqtt_config_t *param)
-{
-    int ret = en_oc_mqtt_err_system ;
-    if((NULL != s_oc_mqtt) &&(NULL != s_oc_mqtt->op.config))
-    {
-       ret = s_oc_mqtt->op.config(param);
-    }
-
-    return ret;
-}
-
-int oc_mqtt_deconfig()
-{
-    int ret = en_oc_mqtt_err_system;
-
-    if((NULL != s_oc_mqtt) \
-       &&(NULL != s_oc_mqtt->op.config))
-    {
-       ret = s_oc_mqtt->op.deconfig();
-    }
-
-    return ret;
-}
-
-int oc_mqtt_publish(char  *topic,uint8_t *msg,int msg_len,int qos)
-{
-    int ret = en_oc_mqtt_err_system;
-
-    if((NULL != s_oc_mqtt) &&(NULL != s_oc_mqtt->op.publish))
-    {
-       ret = s_oc_mqtt->op.publish(topic,msg,msg_len,qos);
-    }
-
-    return ret;
-}
-
-int oc_mqtt_report(uint8_t *msg, int len, int qos)
-{
-    int ret = en_oc_mqtt_err_system;
-
-    ret = oc_mqtt_publish(NULL,msg,len,qos);
-
-    return ret;
-}
-
-int oc_mqtt_subscribe(char *topic,int qos)
-{
-    int ret = en_oc_mqtt_err_system;
-
-    if((NULL != s_oc_mqtt) &&(NULL != s_oc_mqtt->op.subscribe))
-    {
-       ret = s_oc_mqtt->op.subscribe(topic,qos);
-    }
-
-    return ret;
-}
-
-
-///////////////////////OC LWM2M AGENT INITIALIZE////////////////////////////////
-int oc_mqtt_init()
-{
     return 0;
 }
 
-
-static const char *s_oc_mqtt_err_tab[en_oc_mqtt_err_last] =
+int oc_service_init (const char* name)
 {
-    "success",
-    "parameter_err",
-    "network_err",
-    "version_err",
-    "clientid_err",
-    "server_err",
-    "userpwd_err",
-    "clientauth_err",
-    "subscribe_err",
-    "publish_err",
-    "reconfigure_err",
-    "nonconfigure_err",
-    "mqttconnect_err",
-    "bsaddrtimeout_err",
-    "sysmemory_err",
-    "system_err",
-};
+	if (service_create (name, __oc_service_handler, 0x1000, 6) == INVALID_SID)
+	{
+	    printf ("Fail to create oc service!\n");
 
-const char *oc_mqtt_err(int code)
-{
-    const char *ret = NULL;
-    if((code >= en_oc_mqtt_err_last) || (code < 0))
-    {
-        ret =  "UNKNOWN";
-    }
-    else
-    {
-        ret = s_oc_mqtt_err_tab[code];
-    }
-    return ret;
+	    return -1;
+	}
+
+	return 0;
 }
-
-
-
-
